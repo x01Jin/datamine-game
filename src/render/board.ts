@@ -535,7 +535,7 @@ export class Board {
     view.glyph.width = 16;
     view.glyph.height = 16;
 
-    view.title.text = node.kind === 'extractor' ? 'RAW NOISE' : this.tierName(node);
+    view.title.text = node.kind === 'extractor' ? 'RAW DATA' : this.tierName(node);
     view.title.tint = CHROME.ink;
     view.title.position.set(b.left + 38, b.top + 11);
 

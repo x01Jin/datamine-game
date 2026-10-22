@@ -69,7 +69,7 @@ export const CORE_UPGRADES: CoreUpgrade[] = [
 ];
 
 const CURATED = [
-  'Raw Noise',
+  'Raw Data',
   'Clean Bits',
   'Signals',
   'Patterns',

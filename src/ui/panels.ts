@@ -232,8 +232,8 @@ export function renderBuild(ui: UI): void {
         entry.meta,
         `T00 · ${fmtRate(nominalRate(state, { kind: 'extractor', level: 1 } as MachineNode))}`,
       );
-      setText(entry.recipe, 'Extracts Raw Noise');
-      card.title = `Add an extractor. Cost: ${fmt(cost.amount)} ${info.name}. Produces Raw Noise.`;
+      setText(entry.recipe, 'Extracts Raw Data');
+      card.title = `Add an extractor. Cost: ${fmt(cost.amount)} ${info.name}. Produces Raw Data.`;
     } else {
       const recipe = recipeFor(tier ?? 1);
       const inputs = (recipe?.inputs ?? [])
@@ -468,15 +468,15 @@ export function updateHint(ui: UI): void {
     text =
       'Click the board to drop wire points, then click an input port. Right-click undoes the last point, Esc cancels.';
   } else if (!hasLink) {
-    text = "Click the extractor's output port, then the vault's input port, to bank raw noise.";
+    text = "Click the extractor's output port, then the vault's input port, to bank raw data.";
   } else if (state.unlockedTier === 1 && !tier1) {
-    text = 'Raw noise is banked and spendable. Build a Clean Bits forge from the panel.';
+    text = 'Raw data is banked and spendable. Build a Clean Bits forge from the panel.';
   } else if (tier1 && !rawInto1) {
-    text = 'Wire raw noise into the Clean Bits forge.';
+    text = 'Wire raw data into the Clean Bits forge.';
   } else if (tier1 && !outOf1) {
     text = "Send the forge's output into the vault to bank Clean Bits.";
   } else if (state.unlockedTier === 2) {
-    text = 'A Signals forge is open. It wants Clean Bits and raw noise.';
+    text = 'A Signals forge is open. It wants Clean Bits and raw data.';
   } else if (busy) {
     text = 'That machine is running at 100%. Overclock it to widen the flow.';
   } else if (shared) {

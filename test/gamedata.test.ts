@@ -29,7 +29,7 @@ test('tier names stay unique and procedural tiers keep expanding', () => {
     names.add(info.name);
     assert.equal(info.tier, tier);
   }
-  assert.equal(dataInfo(0).name, 'Raw Noise');
+  assert.equal(dataInfo(0).name, 'Raw Data');
   assert.equal(dataInfo(9).name, 'Singularity');
   assert.match(dataInfo(10).name, / 10$/);
 });

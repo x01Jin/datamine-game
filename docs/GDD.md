@@ -1,6 +1,6 @@
 # DATAMINE — game design
 
-A signal refinery that never ends. You dig raw noise out of the network, refine it into higher and higher signals, and bank the results. The archive has a bottom.
+A data refinery that never ends. You dig raw data out of the network, refine it into higher and higher signals, and bank the results. The archive has a bottom.
 
 ## The pitch
 

@@ -118,7 +118,7 @@ test('completing a directive pays out and issues a replacement', () => {
       goal: 5,
       base: 0,
       title: 'Test order',
-      brief: 'Bank 5 Raw Noise.',
+      brief: 'Bank 5 Raw Data.',
       reward: { tier: 0, amount: 20 },
       cores: 1,
     },

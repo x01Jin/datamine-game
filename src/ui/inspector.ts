@@ -148,10 +148,10 @@ function buildNode(ui: UI, node: ExtractorNode | ProcessorNode): void {
   const recipe = isExtractor ? null : recipeFor(node.tier);
   const cycle = recipe ? recipe.cycle / speed : 0;
   const recipeLine = isExtractor
-    ? '<span class="t">Raw Noise</span><span class="muted">from the network</span>'
+    ? '<span class="t">Raw Data</span><span class="muted">from the network</span>'
     : recipeMarkup(tier);
   const recipeTitle = isExtractor
-    ? 'Mines raw noise continuously. Raw noise buys extractors and feeds the first forge.'
+    ? 'Mines raw data continuously. Raw data buys extractors and feeds the first forge.'
     : `One cycle every ${fmt(cycle)}s. Buffer holds ${fmt(cap)} of each stream.`;
 
   const bars: string[] = [];
@@ -432,7 +432,7 @@ function buildLink(ui: UI, link: Link | null, anchorIndex = -1): void {
 
 function machineName(node: MachineNode): string {
   if (node.kind === 'vault') return 'The Vault';
-  if (node.kind === 'extractor') return 'Raw Noise Extractor';
+  if (node.kind === 'extractor') return 'Raw Data Extractor';
   return `${dataInfo(node.tier).name} Forge`;
 }
 
