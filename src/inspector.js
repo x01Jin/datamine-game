@@ -274,7 +274,7 @@ function buildLink(ui, link, anchorIndex = -1) {
         <div class="insp-label">Anchor ${anchorIndex + 1}</div>
         <div class="kv">
           <div class="kv-row"><span>Position</span><b>${Math.round(anchor.x)}, ${Math.round(anchor.y)}</b></div>
-          <div class="kv-row"><span>Grid</span><b>${anchor.x % GRID.fine === 0 && anchor.y % GRID.fine === 0 ? 'snapped' : 'free'}</b></div>
+          <div class="kv-row"><span>Grid</span><b>${anchor.x % GRID.cell === 0 && anchor.y % GRID.cell === 0 ? 'snapped' : 'free'}</b></div>
         </div>
         <div class="nudge-row">
           <button class="btn btn-quiet" data-action="nudge-anchor" data-dx="-1" data-dy="0">←</button>
@@ -313,7 +313,7 @@ function buildLink(ui, link, anchorIndex = -1) {
           <button class="btn btn-quiet" data-action="add-anchor">Add anchor</button>
           <button class="btn btn-quiet" data-action="clear-route" ${anchors.length ? '' : 'disabled'}>Clear route</button>
         </div>
-        <div class="insp-recipe-note">Double-click the wire on the board to drop an anchor. Drag a handle to move it, right-click to remove it.</div>
+        <div class="insp-recipe-note">Click an output port, then click the board to lay out points, then click an input port. Double-click a wire to drop an anchor. Right-click a handle removes it.</div>
       </section>
 
       ${anchorSection}

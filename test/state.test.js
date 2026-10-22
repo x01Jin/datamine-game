@@ -50,6 +50,7 @@ test('routes, priorities, cores and directives survive a save', () => {
     to: 2,
     tier: 0,
     priority: 2,
+    side: 'n',
     anchors: [{ x: 48, y: -24 }],
   });
   state.cores = 12;
@@ -61,6 +62,7 @@ test('routes, priorities, cores and directives survive a save', () => {
 
   const imported = importGame(serialize(state));
   assert.equal(imported.links[0].priority, 2);
+  assert.equal(imported.links[0].side, 'n');
   assert.deepEqual(imported.links[0].anchors, [{ x: 48, y: -24 }]);
   assert.equal(imported.cores, 12);
   assert.equal(imported.coreRanks.momentum, 3);
@@ -79,10 +81,12 @@ test('an invalid priority falls back to the default and anchors are bounded', ()
     to: 2,
     tier: 0,
     priority: 9,
+    side: 'z',
     anchors: Array.from({ length: 40 }, (_, index) => ({ x: index, y: 0 })),
   });
   const imported = importGame(serialize(state));
   assert.equal(imported.links[0].priority, 0.5);
+  assert.equal(imported.links[0].side, null);
   assert.equal(imported.links[0].anchors.length, 24);
 });
 

@@ -1,13 +1,17 @@
 import {
-  hitNode, hitPort, findInputPort, inputPorts,
+  hitNode, hitPort, findInputPort, inputPorts, outputPort, facePort,
   linkPath, overlapsNode, snapNode, snapAnchor, anchorGuides, projectToPath,
+  portWorldPos, faceFor, nodeBounds,
 } from './layout.js';
 import {
   placeExtractor, placeProcessor, connectNodes, currentCost, canAfford,
   addLinkAnchor, setLinkAnchor, removeLinkAnchor,
 } from './actions.js';
+import { dataInfo } from './gamedata.js';
 
 const ANCHOR_GRAB = 11;
+const MAX_WIRE_POINTS = 24;
+const CLICK_SLOP = 4;
 
 export class Interaction {
   constructor(canvas, app) {
@@ -19,6 +23,8 @@ export class Interaction {
     this.pan = null;
     this.pinch = null;
     this.wire = null;
+    this.press = null;
+    this.resumeWire = null;
     this.anchorDrag = null;
     this.spaceHeld = false;
     this.lastScreen = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
@@ -62,6 +68,7 @@ export class Interaction {
   onPointerDown(event) {
     if (event.button !== 0 && event.button !== 1) return;
     this.lastScreen = { x: event.clientX, y: event.clientY };
+    this.press = { x: event.clientX, y: event.clientY };
     this.canvas.setPointerCapture?.(event.pointerId);
     this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
@@ -82,6 +89,8 @@ export class Interaction {
       this.place(p, event.shiftKey);
       return;
     }
+
+    if (this.mode === 'wire' && this.wire) return;
 
     const anchorHit = this.anchorAt(p.x, p.y);
     if (anchorHit) {
@@ -170,7 +179,7 @@ export class Interaction {
         this.drag.node.x = target.x;
         this.drag.node.y = target.y;
       }
-      this.app.view.dragCell = { x: this.drag.node.x, y: this.drag.node.y };
+      this.app.view.dragCell = { x: this.drag.node.x, y: this.drag.node.y, kind: this.drag.node.kind };
       this.canvas.classList.add('is-node');
       return;
     }
@@ -199,8 +208,13 @@ export class Interaction {
       return;
     }
 
+    if (event.button === 2) {
+      this.press = null;
+      return;
+    }
+
     if (this.mode === 'wire' && this.wire) {
-      this.finishWire();
+      this.resolveWirePress(event);
       return;
     }
 
@@ -231,6 +245,13 @@ export class Interaction {
         this.app.ui.closeMobilePanels();
       }
       this.pan = null;
+      if (this.resumeWire) {
+        this.wire = this.resumeWire;
+        this.resumeWire = null;
+        this.mode = 'wire';
+        this.updateCursor();
+        return;
+      }
       this.mode = null;
       this.updateCursor();
       return;
@@ -271,6 +292,17 @@ export class Interaction {
 
   onContextMenu(event) {
     event.preventDefault();
+    if (this.mode === 'wire' && this.wire) {
+      const draft = this.app.view.linkDraft;
+      if (draft?.points.length) {
+        draft.points.pop();
+        this.app.audio.click();
+        this.app.renderer.draw(performance.now());
+        return;
+      }
+      this.clearDraft();
+      return;
+    }
     const p = this.world(event);
     const hit = this.anchorAt(p.x, p.y);
     if (!hit) return;
@@ -387,6 +419,7 @@ export class Interaction {
   }
 
   beginPan(event) {
+    this.resumeWire = this.mode === 'wire' ? this.wire : null;
     this.mode = 'pan';
     this.pan = {
       startX: event.clientX,
@@ -398,16 +431,20 @@ export class Interaction {
     this.canvas.classList.add('is-panning');
   }
 
-  beginWire(node, port, p) {
+  beginWire(node, port, p, fresh = true) {
     this.mode = 'wire';
-    this.wire = { fromId: node.id, tier: port.tier };
+    this.wire = { fromId: node.id, tier: port.tier, justBegan: fresh };
+    const snapped = this.snapPosition(p.x, p.y);
     this.app.view.linkDraft = {
       fromId: node.id,
       tier: port.tier,
-      x: p.x,
-      y: p.y,
+      points: [],
+      x: snapped.x,
+      y: snapped.y,
       targetId: null,
       targetTier: null,
+      targetFace: null,
+      targetPos: null,
     };
     this.app.view.selection = null;
     this.app.ui.deselect();
@@ -417,55 +454,166 @@ export class Interaction {
   updateWire(p) {
     const draft = this.app.view.linkDraft;
     if (!draft) return;
-    draft.x = p.x;
-    draft.y = p.y;
+    const snapped = this.snapPosition(p.x, p.y);
+    draft.x = snapped.x;
+    draft.y = snapped.y;
     draft.targetId = null;
     draft.targetTier = null;
+    draft.targetFace = null;
+    draft.targetPos = null;
     this.app.view.hoverPort = null;
 
-    let target = null;
-    let port = null;
+    const fromId = this.wire.fromId;
     const portHit = this.portAt(p.x, p.y);
-    if (portHit && portHit.node.id !== this.wire.fromId) {
-      if (portHit.port.dir === 'in') {
-        target = portHit.node;
-        port = portHit.port.universal || portHit.port.tier === this.wire.tier
-          ? portHit.port
-          : findInputPort(target, this.wire.tier);
-      }
+    if (portHit && portHit.node.id !== fromId && portHit.port.dir === 'in') {
+      const port = this.compatiblePort(portHit.node, portHit.port);
+      if (port) this.markTarget(draft, portHit.node, port);
     } else {
-      target = this.nodeAt(p.x, p.y);
-      if (target?.id === this.wire.fromId || target?.kind === 'extractor') target = null;
-      if (target) {
-        if (target.kind === 'vault') port = inputPorts(target)[0];
-        else if (target.kind === 'processor') port = findInputPort(target, this.wire.tier);
+      const node = this.nodeAt(p.x, p.y);
+      if (node && node.id !== fromId && node.kind !== 'extractor') {
+        const port = this.compatiblePort(node, null);
+        if (port) this.markTarget(draft, node, port);
       }
-    }
-    if (target) {
-      draft.targetId = target.id;
-      draft.targetTier = port ? (port.universal ? null : port.tier) : null;
-      this.app.view.hoverPort = port
-        ? { nodeId: target.id, dir: 'in', tier: port.universal ? null : port.tier }
-        : null;
     }
     this.canvas.classList.add('is-wiring');
   }
 
-  finishWire() {
-    const draft = this.app.view.linkDraft;
-    if (draft) {
-      const targetId = draft.targetId || this.nodeAt(draft.x, draft.y)?.id || null;
-      if (targetId) connectNodes(this.app, this.wire.fromId, targetId);
+  markTarget(draft, node, port) {
+    draft.targetId = node.id;
+    draft.targetTier = port.universal ? null : port.tier;
+    draft.targetFace = port.face;
+    draft.targetPos = portWorldPos(node, port);
+    this.app.view.hoverPort = {
+      nodeId: node.id,
+      dir: 'in',
+      tier: port.universal ? null : port.tier,
+      index: port.index,
+    };
+  }
+
+  resolveWirePress(event) {
+    const wire = this.wire;
+    const p = this.world(event);
+    const press = this.press;
+    const moved = press
+      ? Math.abs(event.clientX - press.x) + Math.abs(event.clientY - press.y) > CLICK_SLOP
+      : false;
+    this.press = null;
+
+    if (wire.justBegan) {
+      wire.justBegan = false;
+      if (moved) this.connectAt(p);
+      return;
     }
+    if (this.connectAt(p)) return;
+    if (moved) return;
+    this.addWirePoint(p);
+  }
+
+  connectAt(p) {
+    const draft = this.app.view.linkDraft;
+    if (!draft) return false;
+    const fromId = this.wire.fromId;
+
+    const portHit = this.portAt(p.x, p.y);
+    if (portHit && portHit.node.id !== fromId) {
+      if (portHit.port.dir === 'out') {
+        this.beginWire(portHit.node, portHit.port, p, false);
+        return true;
+      }
+      const port = this.compatiblePort(portHit.node, portHit.port);
+      if (!port) {
+        this.denyFit();
+        return true;
+      }
+      this.completeWire(portHit.node, port, portHit.port.face);
+      return true;
+    }
+
+    const node = this.nodeAt(p.x, p.y);
+    if (node) {
+      if (node.id === fromId) return true;
+      if (node.kind === 'extractor') {
+        this.deny('Extractors have no input.');
+        return true;
+      }
+      const port = this.compatiblePort(node, null);
+      if (!port) {
+        this.denyFit();
+        return true;
+      }
+      this.completeWire(node, port, null);
+      return true;
+    }
+
+    return false;
+  }
+
+  compatiblePort(node, port) {
+    if (node.kind === 'vault') return port || this.vaultPortFor(node);
+    return findInputPort(node, this.wire.tier);
+  }
+
+  vaultPortFor(node) {
+    const from = this.nodeById(this.wire.fromId);
+    const draft = this.app.view.linkDraft;
+    const last = draft?.points?.length ? draft.points[draft.points.length - 1] : null;
+    const out = from ? outputPort(from) : null;
+    const approach = last || (out ? portWorldPos(from, out) : { x: node.x, y: node.y });
+    const face = faceFor(approach.x - node.x, approach.y - node.y);
+    return facePort(node, face) || inputPorts(node)[0] || null;
+  }
+
+  denyFit() {
+    this.deny(`${dataInfo(this.wire.tier).name} does not fit that input.`);
+  }
+
+  deny(text) {
+    this.app.audio.deny();
+    this.app.toast({ text, tone: 'bad', quiet: true });
+  }
+
+  completeWire(target, port, face) {
+    const draft = this.app.view.linkDraft;
+    const points = (draft?.points || []).map((point) => ({ x: point.x, y: point.y }));
+    const side = face && target.kind === 'vault' ? face : null;
+    const link = connectNodes(this.app, this.wire.fromId, target.id, { points, side });
     this.clearDraft();
     this.app.view.hoverPort = null;
     this.app.renderer.draw(performance.now());
     this.updateCursor();
+    return link;
+  }
+
+  addWirePoint(p) {
+    const draft = this.app.view.linkDraft;
+    if (!draft) return;
+    if (draft.points.length >= MAX_WIRE_POINTS) {
+      this.deny('That route already has enough points.');
+      return;
+    }
+    const point = this.snapPosition(p.x, p.y);
+    if (this.insideMachine(point)) {
+      this.deny('A wire cannot run through a machine.');
+      return;
+    }
+    draft.points.push(point);
+    this.app.audio.click();
+  }
+
+  insideMachine(point) {
+    for (const node of this.app.state.nodes) {
+      const b = nodeBounds(node);
+      if (point.x >= b.left && point.x <= b.right && point.y >= b.top && point.y <= b.bottom) return true;
+    }
+    return false;
   }
 
   clearDraft() {
     this.app.view.linkDraft = null;
     this.wire = null;
+    this.press = null;
+    this.resumeWire = null;
     this.mode = null;
     this.updateCursor();
   }
@@ -479,8 +627,14 @@ export class Interaction {
     this.drag = null;
     this.pan = null;
     this.anchorDrag = null;
+    this.press = null;
+    this.resumeWire = null;
     this.mode = null;
     this.updateCursor();
+  }
+
+  nodeById(id) {
+    return this.app.state.nodes.find((node) => node.id === id) || null;
   }
 
   nodeAt(wx, wy) {
@@ -591,6 +745,7 @@ export class Interaction {
         nodeId: portHit.node.id,
         dir: portHit.port.dir,
         tier: portHit.port.universal ? null : portHit.port.tier,
+        index: portHit.port.index,
       };
     } else {
       const node = this.nodeAt(wx, wy);
@@ -654,6 +809,7 @@ export class Interaction {
     this.drag = null;
     this.pan = null;
     this.wire = null;
+    this.resumeWire = null;
     if (this.app.view.linkDraft) this.app.view.linkDraft = null;
     const [a, b] = [...this.pointers.values()];
     const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };

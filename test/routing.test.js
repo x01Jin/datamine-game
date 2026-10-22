@@ -5,7 +5,7 @@ import {
   connectNodes, addLinkAnchor, setLinkAnchor, removeLinkAnchor, clearLinkAnchors,
   setLinkPriority,
 } from '../src/actions.js';
-import { snapNode, snapAnchor, linkPath, GRID } from '../src/layout.js';
+import { snapNode, snapAnchor, linkPath, GRID, inputPorts, portWorldPos } from '../src/layout.js';
 import { step } from '../src/sim.js';
 
 function appFor(state = createInitialState()) {
@@ -24,20 +24,79 @@ function appFor(state = createInitialState()) {
   };
 }
 
-test('machines snap to the floor lattice', () => {
+test('machines and wire points share one grid', () => {
   assert.deepEqual(snapNode(10, 10), { x: 0, y: 0 });
-  assert.deepEqual(snapNode(GRID.cellW + 4, 0), { x: GRID.cellW, y: 0 });
-  assert.deepEqual(snapNode(-4, -GRID.cellH - 4), { x: 0, y: -GRID.cellH });
-  assert.equal(snapNode(GRID.cellW * 3, GRID.cellH * 2).x % GRID.cellW, 0);
+  assert.deepEqual(snapNode(GRID.cell + 4, 0), { x: GRID.cell, y: 0 });
+  assert.deepEqual(snapNode(-4, -GRID.cell - 4), { x: 0, y: -GRID.cell });
+  assert.equal(snapNode(GRID.cell * 3, GRID.cell * 2).x % GRID.cell, 0);
+
+  const node = snapNode(31, 47);
+  const anchor = snapAnchor(31, 47, { xs: [], ys: [] }, 10);
+  assert.deepEqual(anchor, node);
 });
 
-test('anchors snap to the fine grid and magnet onto port lines', () => {
-  const snapped = snapAnchor(5, 5, { xs: [], ys: [] }, 10);
-  assert.equal(snapped.x % GRID.fine, 0);
-  assert.equal(snapped.y % GRID.fine, 0);
-
+test('anchors magnet onto port lines', () => {
   const guided = snapAnchor(100, 200, { xs: [100], ys: [] }, 8);
   assert.equal(guided.x, 100);
+});
+
+test('the vault takes a wire on every side', () => {
+  const state = createInitialState();
+  const vault = state.nodes[1];
+  const ports = inputPorts(vault);
+  assert.equal(ports.length, 4);
+  assert.deepEqual(ports.map((port) => port.face).sort(), ['e', 'n', 's', 'w']);
+  for (const port of ports) {
+    assert.equal(port.universal, true);
+    const pos = portWorldPos(vault, port);
+    assert.ok(pos.x % GRID.cell === 0 && pos.y % GRID.cell === 0);
+  }
+});
+
+test('a wire lands on the vault side it approaches from', () => {
+  const state = createInitialState();
+  const extractor = state.nodes[0];
+  const vault = state.nodes[1];
+  const link = { id: 9, from: extractor.id, to: vault.id, tier: 0, anchors: [] };
+
+  const west = linkPath(link, extractor, vault);
+  assert.equal(west.curve.d.x, vault.x - 96);
+  assert.equal(west.curve.d.y, vault.y);
+
+  extractor.x = vault.x;
+  extractor.y = vault.y - 240;
+  const north = linkPath(link, extractor, vault);
+  assert.equal(north.curve.d.x, vault.x);
+  assert.equal(north.curve.d.y, vault.y - 96);
+});
+
+test('a pinned side overrides the approach', () => {
+  const state = createInitialState();
+  const extractor = state.nodes[0];
+  const vault = state.nodes[1];
+  const link = { id: 9, from: extractor.id, to: vault.id, tier: 0, anchors: [], side: 's' };
+  const path = linkPath(link, extractor, vault);
+  assert.equal(path.curve.d.x, vault.x);
+  assert.equal(path.curve.d.y, vault.y + 96);
+});
+
+test('a wire is created with its route and pinned side', () => {
+  const state = createInitialState();
+  const app = appFor(state);
+  const link = connectNodes(app, 1, 2, { points: [{ x: 0, y: 48 }, { x: 96, y: 48 }], side: 'n' });
+  assert.equal(link.anchors.length, 2);
+  assert.deepEqual(link.anchors[0], { x: 0, y: 48 });
+  assert.deepEqual(link.anchors[1], { x: 96, y: 48 });
+  assert.equal(link.side, 'n');
+});
+
+test('a side is only kept for a vault', () => {
+  const state = createInitialState();
+  const app = appFor(state);
+  const forge = makeProcessor(state.nextId++, 1, 0, 240);
+  state.nodes.push(forge);
+  const link = connectNodes(app, 1, forge.id, { side: 'n' });
+  assert.equal(link.side, undefined);
 });
 
 test('a wire carries anchors and they can be moved and removed', () => {

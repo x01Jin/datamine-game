@@ -1,19 +1,24 @@
 import { recipeFor } from './gamedata.js';
 
 export const SIZES = {
-  extractor: { w: 188, h: 104 },
-  processor: { w: 196, h: 116 },
-  vault: { w: 168, h: 168 },
+  extractor: { w: 192, h: 96 },
+  processor: { w: 192, h: 96 },
+  vault: { w: 192, h: 192 },
 };
 
 export const GRID = Object.freeze({
-  cellW: 232,
-  cellH: 190,
-  fine: 24,
+  cell: 24,
   margin: 12,
 });
 
-const PORT_STUB = 26;
+const PORT_STUB = 24;
+
+const NORMALS = {
+  e: { dx: 1, dy: 0 },
+  w: { dx: -1, dy: 0 },
+  n: { dx: 0, dy: -1 },
+  s: { dx: 0, dy: 1 },
+};
 
 function nodeSize(node) {
   return SIZES[node.kind] || SIZES.processor;
@@ -33,18 +38,24 @@ export function nodeBounds(node) {
 
 export function inputPorts(node) {
   if (node.kind === 'vault') {
-    return [{ dir: 'in', tier: null, index: 0, dx: -SIZES.vault.w / 2, dy: 0, universal: true }];
+    const half = SIZES.vault.w / 2;
+    return [
+      { dir: 'in', tier: null, index: 0, face: 'w', dx: -half, dy: 0, universal: true },
+      { dir: 'in', tier: null, index: 1, face: 'e', dx: half, dy: 0, universal: true },
+      { dir: 'in', tier: null, index: 2, face: 'n', dx: 0, dy: -half, universal: true },
+      { dir: 'in', tier: null, index: 3, face: 's', dx: 0, dy: half, universal: true },
+    ];
   }
   if (node.kind !== 'processor') return [];
   const recipe = recipeFor(node.tier);
-  const start = recipe.inputs.length === 1 ? 14 : -2;
-  const gap = 28;
+  const dx = -SIZES.processor.w / 2;
   return recipe.inputs.map((input, index) => ({
     dir: 'in',
     tier: input.tier,
     index,
-    dx: -SIZES.processor.w / 2,
-    dy: start + index * gap,
+    face: 'w',
+    dx,
+    dy: recipe.inputs.length === 1 ? 0 : -24 + index * 48,
     universal: false,
     amount: input.amount,
   }));
@@ -53,7 +64,14 @@ export function inputPorts(node) {
 export function outputPort(node) {
   if (node.kind === 'vault') return null;
   const size = nodeSize(node);
-  return { dir: 'out', tier: node.kind === 'extractor' ? 0 : node.tier, dx: size.w / 2, dy: 10 };
+  return {
+    dir: 'out',
+    tier: node.kind === 'extractor' ? 0 : node.tier,
+    index: 0,
+    face: 'e',
+    dx: size.w / 2,
+    dy: 0,
+  };
 }
 
 export function portWorldPos(node, port) {
@@ -61,8 +79,36 @@ export function portWorldPos(node, port) {
 }
 
 export function findInputPort(node, tier) {
-  if (node.kind === 'vault') return inputPorts(node)[0];
   return inputPorts(node).find((port) => port.tier === tier) || null;
+}
+
+export function faceFor(dx, dy) {
+  if (Math.abs(dx) + 1 > Math.abs(dy)) return dx < 0 ? 'w' : 'e';
+  return dy < 0 ? 'n' : 's';
+}
+
+export function facePort(node, face) {
+  return inputPorts(node).find((port) => port.face === face) || null;
+}
+
+export function targetPortFor(link, to, from) {
+  if (!to) return null;
+  if (to.kind !== 'vault') {
+    const ports = inputPorts(to);
+    if (ports.length === 0) return null;
+    return link.tier === null ? ports[0] : (findInputPort(to, link.tier) || null);
+  }
+  const ports = inputPorts(to);
+  if (link.side) {
+    const pinned = ports.find((port) => port.face === link.side);
+    if (pinned) return pinned;
+  }
+  const anchors = link.anchors || [];
+  const last = anchors.length ? anchors[anchors.length - 1] : null;
+  const out = from ? outputPort(from) : null;
+  const approach = last || (out ? portWorldPos(from, out) : { x: to.x, y: to.y });
+  const face = faceFor(approach.x - to.x, approach.y - to.y);
+  return ports.find((port) => port.face === face) || ports[0];
 }
 
 export function hitNode(node, wx, wy) {
@@ -71,10 +117,10 @@ export function hitNode(node, wx, wy) {
 }
 
 export function hitPort(node, wx, wy, radius) {
-  const ports = [...inputPorts(node)];
+  const all = [...inputPorts(node)];
   const output = outputPort(node);
-  if (output) ports.push(output);
-  for (const port of ports) {
+  if (output) all.push(output);
+  for (const port of all) {
     const pos = portWorldPos(node, port);
     if ((wx - pos.x) ** 2 + (wy - pos.y) ** 2 <= radius ** 2) return port;
   }
@@ -98,16 +144,28 @@ export function overlapsNode(nodes, x, y, kind, ignoreId = null) {
 
 export function snapNode(x, y) {
   return {
-    x: Math.round(x / GRID.cellW) * GRID.cellW + 0,
-    y: Math.round(y / GRID.cellH) * GRID.cellH + 0,
+    x: Math.round(x / GRID.cell) * GRID.cell + 0,
+    y: Math.round(y / GRID.cell) * GRID.cell + 0,
   };
 }
 
-function snapFine(x, y) {
-  return {
-    x: Math.round(x / GRID.fine) * GRID.fine + 0,
-    y: Math.round(y / GRID.fine) * GRID.fine + 0,
-  };
+export function snapAnchor(x, y, guides, threshold) {
+  const snapped = snapNode(x, y);
+  let px = snapped.x;
+  let py = snapped.y;
+  for (const guide of guides.xs) {
+    if (Math.abs(guide - x) <= threshold) {
+      px = guide;
+      break;
+    }
+  }
+  for (const guide of guides.ys) {
+    if (Math.abs(guide - y) <= threshold) {
+      py = guide;
+      break;
+    }
+  }
+  return { x: px, y: py };
 }
 
 export function bezierPoints(from, to) {
@@ -170,14 +228,23 @@ export function boundsOfNodes(nodes) {
   return { left, right, top, bottom };
 }
 
-function targetPortFor(node, tier) {
-  if (!node) return null;
-  return tier === null ? inputPorts(node)[0] : findInputPort(node, tier);
+function stubPoint(pos, port) {
+  const normal = NORMALS[port.face] || NORMALS.e;
+  return { x: pos.x + normal.dx * PORT_STUB, y: pos.y + normal.dy * PORT_STUB };
+}
+
+export function routePath(points) {
+  return {
+    kind: 'route',
+    points,
+    at: (t) => pointAlongPolyline(points, t),
+    distance: (x, y) => distanceToPolyline(points, x, y),
+  };
 }
 
 export function linkPath(link, from, to) {
   const outPort = outputPort(from);
-  const inPort = targetPortFor(to, link.tier);
+  const inPort = targetPortFor(link, to, from);
   if (!outPort || !inPort) return null;
   const a = portWorldPos(from, outPort);
   const d = portWorldPos(to, inPort);
@@ -193,19 +260,29 @@ export function linkPath(link, from, to) {
     };
   }
 
-  const points = [
+  return routePath([
     a,
-    { x: a.x + PORT_STUB, y: a.y },
+    stubPoint(a, outPort),
     ...anchors.map((anchor) => ({ x: anchor.x, y: anchor.y })),
-    { x: d.x - PORT_STUB, y: d.y },
+    stubPoint(d, inPort),
     d,
-  ];
-  return {
-    kind: 'route',
-    points,
-    at: (t) => pointAlongPolyline(points, t),
-    distance: (x, y) => distanceToPolyline(points, x, y),
-  };
+  ]);
+}
+
+export function draftPath(draft, from) {
+  const port = outputPort(from);
+  if (!port) return null;
+  const start = portWorldPos(from, port);
+  const points = [start, stubPoint(start, port)];
+  for (const point of draft.points || []) points.push({ x: point.x, y: point.y });
+  if (draft.targetFace && draft.targetPos) {
+    const end = { x: draft.targetPos.x, y: draft.targetPos.y };
+    points.push(stubPoint(end, { face: draft.targetFace }));
+    points.push(end);
+  } else {
+    points.push({ x: draft.x, y: draft.y });
+  }
+  return routePath(points);
 }
 
 function pointAlongPolyline(points, t) {
@@ -264,7 +341,7 @@ export function anchorGuides(link, from, to, excludeIndex = -1) {
   const xs = [];
   const ys = [];
   const outPort = outputPort(from);
-  const inPort = targetPortFor(to, link.tier);
+  const inPort = targetPortFor(link, to, from);
   if (outPort) {
     const pos = portWorldPos(from, outPort);
     xs.push(pos.x);
@@ -282,23 +359,4 @@ export function anchorGuides(link, from, to, excludeIndex = -1) {
     ys.push(anchors[i].y);
   }
   return { xs, ys };
-}
-
-export function snapAnchor(x, y, guides, threshold) {
-  const snapped = snapFine(x, y);
-  let px = snapped.x;
-  let py = snapped.y;
-  for (const guide of guides.xs) {
-    if (Math.abs(guide - x) <= threshold) {
-      px = guide;
-      break;
-    }
-  }
-  for (const guide of guides.ys) {
-    if (Math.abs(guide - y) <= threshold) {
-      py = guide;
-      break;
-    }
-  }
-  return { x: px, y: py };
 }

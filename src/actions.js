@@ -165,7 +165,7 @@ export function dismantleNode(app, id) {
   return true;
 }
 
-export function connectNodes(app, fromId, toId) {
+export function connectNodes(app, fromId, toId, options = {}) {
   const from = nodeById(app.state, fromId);
   const to = nodeById(app.state, toId);
   if (!from || !to) return null;
@@ -213,6 +213,13 @@ export function connectNodes(app, fromId, toId) {
     priority: to.kind === 'vault' ? 0.5 : 1,
     anchors: [],
   };
+  const side = options.side;
+  if (to.kind === 'vault' && ['n', 's', 'e', 'w'].includes(side)) link.side = side;
+  const points = Array.isArray(options.points) ? options.points : [];
+  for (const point of points) {
+    if (link.anchors.length >= MAX_ANCHORS) break;
+    link.anchors.push({ x: point.x, y: point.y });
+  }
   app.state.links.push(link);
   app.audio.connect();
   app.afterChange();

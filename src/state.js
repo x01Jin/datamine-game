@@ -8,10 +8,10 @@ const MAX_AMOUNT = 1e100;
 const MAX_ANCHORS = 24;
 
 export function createInitialState(vertical = false) {
-  const extractorX = vertical ? 0 : -232;
-  const extractorY = vertical ? -190 : 0;
-  const vaultX = vertical ? 0 : 232;
-  const vaultY = vertical ? 190 : 0;
+  const extractorX = vertical ? 0 : -216;
+  const extractorY = vertical ? -192 : 0;
+  const vaultX = vertical ? 0 : 216;
+  const vaultY = vertical ? 192 : 0;
   const state = {
     version: SAVE_VERSION,
     createdAt: Date.now(),
@@ -122,6 +122,7 @@ function snapshot(state) {
       to: link.to,
       tier: link.tier,
       priority: normalizePriority(link.priority),
+      side: link.side || null,
       anchors: (link.anchors || []).map((anchor) => ({ x: anchor.x, y: anchor.y })),
     })),
     bank: { ...state.bank },
@@ -312,12 +313,14 @@ function normalize(data) {
     if (to.kind !== 'processor' && to.kind !== 'vault') continue;
     const route = `${from.id}>${to.id}:${from.out.tier}`;
     if (seenRoutes.has(route)) continue;
+    const side = to.kind === 'vault' && ['n', 's', 'e', 'w'].includes(source.side) ? source.side : null;
     const link = {
       id,
       from: from.id,
       to: to.id,
       tier: from.out.tier,
       priority: normalizePriority(source.priority, to.kind === 'vault' ? 0.5 : 1),
+      side,
       anchors: normalizeAnchors(source.anchors),
     };
     seenLinks.add(link.id);

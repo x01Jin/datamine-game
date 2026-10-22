@@ -40,8 +40,8 @@ The loop only works if the player can *see* the problem. A machine labelled STAR
 
 Two verbs make the refinery feel authored rather than assembled:
 
-- **Placing** snaps to a lattice. The board turns into a floor plan with rows and columns, and a player who plans two steps ahead can see the shape of a factory before building it.
-- **Routing** lets a wire carry anchors. A routed wire is a decision: it goes around the machines, it makes the flow legible, it can be dragged into a shape that reads at a glance.
+- **Placing** snaps to a grid. The board turns into a floor plan with rows and columns, and a player who plans two steps ahead can see the shape of a factory before building it. Machines and wires share that grid, so a port and a route point always meet.
+- **Routing** lets a wire carry points. A routed wire is a decision: it goes around the machines, it makes the flow legible, it can be dragged into a shape that reads at a glance. Points are laid down one click at a time from the output port, which keeps the wire on the grid the whole way.
 
 Neither of these change the economy. They change how the player *sees* the economy, which is what makes an idle board worth looking at.
 

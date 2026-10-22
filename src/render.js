@@ -2,8 +2,9 @@ import {
   dataInfo, recipeFor, bufferCap, fmt, fmtRate, tierLabel, withAlpha,
 } from './gamedata.js';
 import {
-  nodeBounds, inputPorts, outputPort, portWorldPos, findInputPort,
-  bezierPoints, bezierAt, boundsOfNodes, linkPath, GRID, SIZES,
+  nodeBounds, inputPorts, outputPort, portWorldPos,
+  bezierPoints, bezierAt, boundsOfNodes, linkPath, draftPath, targetPortFor,
+  GRID, SIZES,
 } from './layout.js';
 import { nodeStatus } from './sim.js';
 
@@ -131,7 +132,7 @@ export class Renderer {
     const byId = new Map(state.nodes.map((node) => [node.id, node]));
     this.drawGrid(ctx, viewBox);
     if (view.dragCell) {
-      this.drawCellHighlight(ctx, view.dragCell.x, view.dragCell.y, 'rgba(233, 223, 199, 0.26)');
+      this.drawFootprint(ctx, view.dragCell.x, view.dragCell.y, view.dragCell.kind, 'rgba(233, 223, 199, 0.26)');
     }
     for (const link of state.links) {
       const from = byId.get(link.from);
@@ -172,7 +173,7 @@ export class Renderer {
 
   linkVisible(link, from, to, box) {
     const outPort = outputPort(from);
-    const inPort = to.kind === 'vault' ? inputPorts(to)[0] : findInputPort(to, link.tier);
+    const inPort = targetPortFor(link, to, from);
     if (!outPort || !inPort) return false;
     const a = portWorldPos(from, outPort);
     const b = portWorldPos(to, inPort);
@@ -255,18 +256,19 @@ export class Renderer {
 
   drawGrid(ctx, box) {
     const zoom = this.app.state.camera.zoom;
-    const { cellW, cellH } = GRID;
-    const startX = Math.floor(box.left / cellW) * cellW;
-    const startY = Math.floor(box.top / cellH) * cellH;
+    let step = GRID.cell;
+    while (step * zoom < 11) step *= 2;
+    const startX = Math.floor(box.left / step) * step;
+    const startY = Math.floor(box.top / step) * step;
     ctx.save();
     ctx.lineWidth = 1 / zoom;
     ctx.strokeStyle = 'rgba(122, 162, 186, 0.085)';
     ctx.beginPath();
-    for (let x = startX; x <= box.right; x += cellW) {
+    for (let x = startX; x <= box.right; x += step) {
       ctx.moveTo(x, box.top);
       ctx.lineTo(x, box.bottom);
     }
-    for (let y = startY; y <= box.bottom; y += cellH) {
+    for (let y = startY; y <= box.bottom; y += step) {
       ctx.moveTo(box.left, y);
       ctx.lineTo(box.right, y);
     }
@@ -274,13 +276,14 @@ export class Renderer {
     ctx.restore();
   }
 
-  drawCellHighlight(ctx, x, y, color) {
+  drawFootprint(ctx, x, y, kind, color) {
     const zoom = this.app.state.camera.zoom;
+    const size = SIZES[kind] || SIZES.processor;
     ctx.save();
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.1 / zoom;
     ctx.setLineDash([5 / zoom, 5 / zoom]);
-    ctx.strokeRect(x - GRID.cellW / 2, y - GRID.cellH / 2, GRID.cellW, GRID.cellH);
+    ctx.strokeRect(x - size.w / 2, y - size.h / 2, size.w, size.h);
     ctx.setLineDash([]);
     ctx.restore();
   }
@@ -292,7 +295,7 @@ export class Renderer {
     const vault = state.nodes.find((node) => node.kind === 'vault');
     if (!extractor || !vault) return;
     const fromPort = outputPort(extractor);
-    const toPort = inputPorts(vault)[0];
+    const toPort = targetPortFor({ tier: 0, anchors: [] }, vault, extractor);
     if (!fromPort || !toPort) return;
     const points = bezierPoints(portWorldPos(extractor, fromPort), portWorldPos(vault, toPort));
     const zoom = state.camera.zoom;
@@ -424,36 +427,62 @@ export class Renderer {
     const draft = view.linkDraft;
     const from = byId.get(draft.fromId);
     if (!from) return;
-    const port = outputPort(from);
-    if (!port) return;
-    const start = portWorldPos(from, port);
-    const end = draft.targetId ? this.portAnchor(byId.get(draft.targetId), draft.targetTier) : { x: draft.x, y: draft.y };
-    if (!end) return;
-    const points = bezierPoints(start, end);
+    const path = draftPath(draft, from);
+    if (!path) return;
     const info = dataInfo(draft.tier);
     const zoom = this.app.state.camera.zoom;
     ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    tracePath(ctx, path);
+    ctx.strokeStyle = 'rgba(3, 6, 9, 0.85)';
+    ctx.lineWidth = 4.4 / zoom;
+    ctx.stroke();
+
+    tracePath(ctx, path);
     ctx.strokeStyle = info.color;
     ctx.lineWidth = 2 / zoom;
     ctx.setLineDash([6 / zoom, 5 / zoom]);
     ctx.lineDashOffset = -(now / 35) % 100;
-    ctx.beginPath();
-    ctx.moveTo(points.a.x, points.a.y);
-    ctx.bezierCurveTo(points.b.x, points.b.y, points.c.x, points.c.y, points.d.x, points.d.y);
     ctx.stroke();
     ctx.setLineDash([]);
+
+    ctx.fillStyle = info.bright;
+    for (const point of draft.points || []) {
+      const size = 4 / zoom;
+      ctx.beginPath();
+      ctx.moveTo(point.x, point.y - size);
+      ctx.lineTo(point.x + size, point.y);
+      ctx.lineTo(point.x, point.y + size);
+      ctx.lineTo(point.x - size, point.y);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    const end = draft.targetPos || { x: draft.x, y: draft.y };
+    if (!draft.targetPos) {
+      const size = 5.5 / zoom;
+      const reach = 13 / zoom;
+      ctx.strokeStyle = withAlpha(info.color, 0.8);
+      ctx.lineWidth = 1.1 / zoom;
+      ctx.beginPath();
+      ctx.moveTo(end.x - reach, end.y);
+      ctx.lineTo(end.x - size, end.y);
+      ctx.moveTo(end.x + size, end.y);
+      ctx.lineTo(end.x + reach, end.y);
+      ctx.moveTo(end.x, end.y - reach);
+      ctx.lineTo(end.x, end.y - size);
+      ctx.moveTo(end.x, end.y + size);
+      ctx.lineTo(end.x, end.y + reach);
+      ctx.stroke();
+      ctx.strokeRect(end.x - size, end.y - size, size * 2, size * 2);
+    }
     ctx.fillStyle = info.bright;
     ctx.beginPath();
-    ctx.arc(end.x, end.y, 4 / zoom, 0, TAU);
+    ctx.arc(end.x, end.y, 4.2 / zoom, 0, TAU);
     ctx.fill();
     ctx.restore();
-  }
-
-  portAnchor(node, tier) {
-    if (!node) return null;
-    const port = tier === null ? inputPorts(node)[0] : findInputPort(node, tier);
-    if (!port) return null;
-    return portWorldPos(node, port);
   }
 
   drawNode(ctx, node, now, animNow, view, t) {
@@ -527,7 +556,7 @@ export class Renderer {
       roundRect(ctx, b.left, b.top, b.w, b.h, radius);
       ctx.clip();
       ctx.fillStyle = gradients.wash;
-      ctx.fillRect(b.left, b.top, b.w, 46);
+      ctx.fillRect(b.left, b.top, b.w, 42);
       ctx.strokeStyle = withAlpha(info.color, 0.55);
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -538,7 +567,7 @@ export class Renderer {
     }
 
     const glyphX = b.left + 24;
-    const glyphY = top + 22;
+    const glyphY = top + 20;
     if (!minimal) {
       ctx.fillStyle = info.soft;
       roundRect(ctx, glyphX - 11, glyphY - 11, 22, 22, 2);
@@ -561,24 +590,24 @@ export class Renderer {
     setFont(ctx, 600, 11, false);
     const titleX = b.left + 44;
     const maxTitle = b.w - 44 - 38;
-    ctx.fillText(fitText(ctx, title, maxTitle), titleX, top + 19);
+    ctx.fillText(fitText(ctx, title, maxTitle), titleX, top + 17);
 
     setFont(ctx, 400, 8, true);
     ctx.fillStyle = COLORS.dim;
     const kind = node.kind === 'extractor' ? 'EXTRACTOR' : `FORGE ${tierLabel(node.tier)}`;
-    ctx.fillText(kind, titleX, top + 31);
+    ctx.fillText(kind, titleX, top + 29);
 
     setFont(ctx, 400, 8.5, true);
     ctx.fillStyle = COLORS.dim;
     ctx.textAlign = 'right';
-    ctx.fillText(`LV ${node.level}`, b.right - 12, top + 19);
+    ctx.fillText(`LV ${node.level}`, b.right - 12, top + 17);
     ctx.textAlign = 'left';
 
     ctx.strokeStyle = 'rgba(255,255,255,0.055)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(b.left + 12, top + 40);
-    ctx.lineTo(b.right - 12, top + 40);
+    ctx.moveTo(b.left + 12, top + 37);
+    ctx.lineTo(b.right - 12, top + 37);
     ctx.stroke();
 
     const status = nodeStatus(this.app.state, node);
@@ -588,35 +617,35 @@ export class Renderer {
     ctx.globalAlpha = dotPulse;
     ctx.fillStyle = dotColor;
     ctx.beginPath();
-    ctx.arc(b.left + 16, top + 51, 2.4, 0, TAU);
+    ctx.arc(b.left + 16, top + 48, 2.4, 0, TAU);
     ctx.fill();
     ctx.globalAlpha = 1;
     setFont(ctx, 400, 8, true);
     ctx.fillStyle = withAlpha(dotColor, 0.9);
-    ctx.fillText(status.toUpperCase(), b.left + 23, top + 54);
+    ctx.fillText(status.toUpperCase(), b.left + 23, top + 51);
 
     if (node.kind === 'processor') {
       const recipe = recipeFor(node.tier);
       const recipeLabel = recipe.inputs.map((input) => `${input.amount}×${tierLabel(input.tier)}`).join(' + ');
       setFont(ctx, 400, 8, true);
       ctx.fillStyle = COLORS.muted;
-      ctx.fillText(`${recipeLabel}  →  1×${tierLabel(recipe.output.tier)}`, b.left + 12, top + 68);
+      ctx.fillText(`${recipeLabel}  →  1×${tierLabel(recipe.output.tier)}`, b.left + 12, top + 64);
     } else {
       setFont(ctx, 400, 8, true);
       ctx.fillStyle = COLORS.muted;
-      ctx.fillText(fmtRate((node._flowOut || 0) || 0.0), b.left + 12, top + 68);
+      ctx.fillText(fmtRate((node._flowOut || 0) || 0.0), b.left + 12, top + 64);
     }
 
     ctx.textAlign = 'right';
     setFont(ctx, 400, 8, true);
     ctx.fillStyle = COLORS.dim;
-    ctx.fillText(`${Math.round(util * 100)}%`, b.right - 12, top + 54);
+    ctx.fillText(`${Math.round(util * 100)}%`, b.right - 12, top + 51);
     ctx.textAlign = 'left';
 
     const cap = bufferCap(this.app.state, node);
     const ratio = Math.max(0, Math.min(1, (node.out?.amount || 0) / (cap || 1)));
     const barLeft = b.left + 12;
-    const barTop = top + 84;
+    const barTop = top + 76;
     const barW = b.w - 24;
     roundRect(ctx, barLeft, barTop, barW, 5, 2.5);
     ctx.fillStyle = 'rgba(255,255,255,0.055)';
@@ -626,15 +655,6 @@ export class Renderer {
       ctx.fillStyle = withAlpha(info.color, 0.82);
       ctx.fill();
     }
-    const outPort = outputPort(node);
-    if (outPort && zoom > 0.9) {
-      setFont(ctx, 400, 7, true);
-      ctx.fillStyle = info.dim;
-      ctx.textAlign = 'right';
-      ctx.fillText(tierLabel(node.kind === 'extractor' ? 0 : node.tier), b.right - 12, top + 96);
-      ctx.textAlign = 'left';
-    }
-
     this.drawPorts(ctx, node, view, now, minimal);
     ctx.restore();
   }
@@ -649,26 +669,26 @@ export class Renderer {
     ctx.textAlign = 'center';
     setFont(ctx, 600, 24, true);
     ctx.fillStyle = COLORS.ink;
-    ctx.fillText(label, center, top + 44);
+    ctx.fillText(label, center, top + 40);
     if (minimal) {
       ctx.fillStyle = dotColor;
       ctx.beginPath();
-      ctx.arc(center, top + 74, 5, 0, TAU);
+      ctx.arc(center, top + 70, 5, 0, TAU);
       ctx.fill();
       ctx.textAlign = 'left';
       return;
     }
     setFont(ctx, 500, 12, true);
     ctx.fillStyle = withAlpha(info.color, 0.85);
-    ctx.fillText(kind, center, top + 66);
+    ctx.fillText(kind, center, top + 62);
 
     ctx.fillStyle = dotColor;
     ctx.beginPath();
-    ctx.arc(center - 30, top + 90, 5, 0, TAU);
+    ctx.arc(center - 30, top + 78, 5, 0, TAU);
     ctx.fill();
     setFont(ctx, 400, 12, true);
     ctx.fillStyle = withAlpha(dotColor, 0.9);
-    ctx.fillText(status.toUpperCase(), center + 4, top + 95);
+    ctx.fillText(status.toUpperCase(), center + 4, top + 83);
     ctx.textAlign = 'left';
   }
 
@@ -676,7 +696,7 @@ export class Renderer {
     const zoom = this.app.state.camera.zoom;
     const b = nodeBounds(vault);
     const cx = vault.x;
-    const cy = vault.y + 8;
+    const cy = vault.y;
     const receiving = (vault._flowIn || 0) > 0.005 || this.app.state.links.some((link) => link.to === vault.id && (link._flow || 0) > 0.005);
     const info = dataInfo(this.app.state.unlockedTier);
     const compact = zoom < 0.8;
@@ -722,21 +742,21 @@ export class Renderer {
     if (compact) {
       setFont(ctx, 500, 15, true);
       ctx.fillStyle = COLORS.muted;
-      ctx.fillText('VAULT', cx, b.top + 30);
+      ctx.fillText('VAULT', cx, b.top + 36);
 
       setFont(ctx, 600, 30, true);
       ctx.fillStyle = COLORS.bone;
-      ctx.fillText(fmt(total), cx, b.top + 72);
+      ctx.fillText(fmt(total), cx, b.top + 84);
       setFont(ctx, 400, 12, true);
       ctx.fillStyle = COLORS.dim;
-      ctx.fillText('UNITS HELD', cx, b.top + 92);
+      ctx.fillText('UNITS HELD', cx, b.top + 106);
 
       setFont(ctx, 400, 12, true);
       ctx.fillStyle = COLORS.dim;
-      ctx.fillText(`${types} type${types === 1 ? '' : 's'}`, cx, b.bottom - 34);
+      ctx.fillText(`${types} type${types === 1 ? '' : 's'}`, cx, b.bottom - 38);
       setFont(ctx, 400, 12, true);
       ctx.fillStyle = incoming > 0.005 ? info.color : COLORS.dim;
-      ctx.fillText(incoming > 0.005 ? fmtRate(incoming) : 'idle', cx, b.bottom - 16);
+      ctx.fillText(incoming > 0.005 ? fmtRate(incoming) : 'idle', cx, b.bottom - 18);
       ctx.textAlign = 'left';
       this.drawPorts(ctx, vault, view, now);
       ctx.restore();
@@ -747,7 +767,7 @@ export class Renderer {
     ctx.fillStyle = COLORS.muted;
     ctx.fillText('V A U L T', cx, b.top + 24);
 
-    const ringR = 43;
+    const ringR = 52;
     ctx.strokeStyle = 'rgba(233, 223, 199, 0.2)';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -815,7 +835,7 @@ export class Renderer {
       const isOut = port.dir === 'out';
       const hovered = view.hoverPort?.nodeId === node.id &&
         view.hoverPort.dir === port.dir &&
-        (port.universal || view.hoverPort.tier === port.tier);
+        view.hoverPort.index === port.index;
       const compatible = draft && !isOut && !draft.targetId &&
         (port.universal || port.tier === draft.tier) &&
         node.id !== draft.fromId;
@@ -855,8 +875,8 @@ export class Renderer {
       if (zoom > 0.9 && !port.universal && port.tier !== null) {
         setFont(ctx, 400, 6.8, true);
         ctx.fillStyle = portInfo.dim;
-        ctx.textAlign = isOut ? 'right' : 'left';
-        ctx.fillText(tierLabel(port.tier), pos.x + (isOut ? -9 : 9), pos.y + 2.2);
+        ctx.textAlign = isOut ? 'left' : 'right';
+        ctx.fillText(tierLabel(port.tier), pos.x + (isOut ? 9 : -9), pos.y + 2.2);
         ctx.textAlign = 'left';
       }
     }
@@ -894,7 +914,7 @@ export class Renderer {
     const top = ghost.y - size.h / 2;
     const zoom = this.app.state.camera.zoom;
     ctx.save();
-    if (ghost.valid) this.drawCellHighlight(ctx, ghost.x, ghost.y, withAlpha(info.color, 0.30));
+    if (ghost.valid) this.drawFootprint(ctx, ghost.x, ghost.y, kind, withAlpha(info.color, 0.30));
     ctx.globalAlpha = 0.55;
     ctx.fillStyle = ghost.valid ? info.faint : 'rgba(227,123,111,0.05)';
     roundRect(ctx, left, top, size.w, size.h, 5);

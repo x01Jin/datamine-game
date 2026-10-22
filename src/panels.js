@@ -340,8 +340,10 @@ export function updateHint(ui) {
   for (const link of state.links) outCount.set(link.from, (outCount.get(link.from) || 0) + 1);
   const shared = [...outCount.values()].some((count) => count > 1);
   let text;
-  if (!hasLink) {
-    text = 'Drag from the extractor\'s output port into the vault to start banking raw noise.';
+  if (ui.app.view.linkDraft) {
+    text = 'Click the board to place wire points, then click an input port. Right-click undoes the last point.';
+  } else if (!hasLink) {
+    text = 'Click the extractor\'s output port, then click the vault\'s input port to start banking raw noise.';
   } else if (state.unlockedTier === 1 && !tier1) {
     text = 'Raw noise is banked and spendable. Build a Clean Bits forge from the panel.';
   } else if (tier1 && !rawInto1) {
@@ -355,7 +357,7 @@ export function updateHint(ui) {
   } else if (shared) {
     text = 'One output feeds several wires. Set a wire\'s priority to decide who gets served first.';
   } else if (state.links.some((link) => (link.anchors || []).length > 0)) {
-    text = 'Double-click a wire to drop an anchor and route it around the machines.';
+    text = 'Click an output port, then click the board to place wire points, then click an input port.';
   } else {
     text = 'Each new signal opens a deeper tier. Scale whatever runs starved; dismantling refunds everything.';
   }

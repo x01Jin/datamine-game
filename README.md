@@ -13,7 +13,8 @@ Open http://localhost:5173. No install step, no build step, no external assets. 
 ## Play
 
 - Click a machine in the Build panel, then click the board to place it. Shift-click keeps the tool armed.
-- Drag from a machine's output port to a compatible input port to make a wire. A wrong port is rejected with a reason.
+- Click a machine's output port, then click the board to lay out wire points, then click an input port to make the wire. Right-click undoes the last point, Esc cancels the wire. Dragging from a port to a port still works.
+- The vault takes a wire on all four sides, so it can be fed from wherever the refinery grows.
 - Drag empty space to pan, scroll to zoom. Middle-drag or hold Space also pans.
 - Click a machine or wire to open its inspector. Upgrades are paid from the bank.
 - Dismantling refunds the full build and upgrade cost. The vault and your final extractor are permanent anchors.
@@ -23,7 +24,7 @@ The first connection is the one that matters: get the extractor's output into th
 
 ## The floor
 
-Machines snap to a lattice, so the refinery lines up like a plant floor. Hold `G` (or turn off "Snap to grid" in Settings) to place them freely.
+Machines and wires share one 24-unit grid. Machine centres, machine edges, ports and wire points all land on it, so a wire meets a port exactly and a route reads like a plan. Hold `G` (or turn off "Snap to grid" in Settings) to place them freely.
 
 Wires can be routed. Double-click a wire to drop an anchor, drag the handle to bend the route, right-click to remove it. A routed wire draws as a hard path through its anchors instead of a curve.
 

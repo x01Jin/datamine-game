@@ -1,1 +1,5 @@
+.ignore
 AGENTS.md
+.playwright-mcp/
+.codegraph/
+information/

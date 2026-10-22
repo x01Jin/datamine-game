@@ -159,8 +159,8 @@ function init() {
       const link = linkById(state, linkId);
       const anchor = link?.anchors?.[index];
       if (!anchor) return false;
-      anchor.x += dx * GRID.fine;
-      anchor.y += dy * GRID.fine;
+      anchor.x += dx * GRID.cell;
+      anchor.y += dy * GRID.cell;
       app.afterChange();
       return true;
     },
