@@ -13,7 +13,7 @@ import {
 import { canAfford, creditsLabel } from '../game/actions.ts';
 import { linkById, nodeById } from '../game/state.ts';
 import { nodeStatus } from '../game/sim.ts';
-import { GRID } from '../layout/geometry.ts';
+import { GRID, FACE_LABEL, rotationFaces } from '../layout/geometry.ts';
 import type { Cost, Link, MachineNode, Selection } from '../game/types.ts';
 import { escapeHtml, glyphSvg, recipeMarkup, sortedBy, statusLabel, tierHex, tierVars } from './dom.ts';
 import type { UI } from './ui.ts';
@@ -158,6 +158,19 @@ function buildNode(ui: UI, node: MachineNode): void {
   const outAmount = node.kind === 'processor' || node.kind === 'extractor' ? node.out.amount : 0;
   bars.push(barRow('out', isExtractor ? 'out' : 'output', tierHex(tier), outAmount, cap));
 
+  const faces = rotationFaces(node);
+  const rotationBlock =
+    node.kind === 'processor'
+      ? `<section class="insp-block">
+          <div class="insp-label">Orientation</div>
+          <div class="rot-row">
+            <button class="btn btn-quiet" data-action="rotate" type="button" title="Turn 90° (R)">Turn 90°</button>
+            <span class="rot-readout">${escapeHtml(FACE_LABEL[faces.in])} in · ${escapeHtml(FACE_LABEL[faces.out])} out</span>
+          </div>
+          <p class="insp-note">Turns the input and output faces. Attached wires follow the new ports.</p>
+        </section>`
+      : '';
+
   root.innerHTML = `
     <div class="insp-head">
       <span class="insp-glyph">${glyphSvg(tier)}</span>
@@ -187,6 +200,8 @@ function buildNode(ui: UI, node: MachineNode): void {
         <div class="insp-label">Buffers</div>
         <div class="bars">${bars.join('')}</div>
       </section>
+
+      ${rotationBlock}
 
       <section class="insp-block">
         <div class="insp-label">Flow</div>

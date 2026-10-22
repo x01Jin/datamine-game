@@ -1264,6 +1264,25 @@ button {
   padding: 5px 0;
 }
 
+.rot-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rot-row .btn {
+  flex: none;
+  min-width: 92px;
+}
+
+.rot-readout {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
 .link-route {
   display: flex;
   align-items: center;
@@ -1380,12 +1399,28 @@ button {
 .viewctl {
   position: fixed;
   z-index: 15;
-  right: calc(var(--rail-inspect) + 12px);
+  right: 12px;
   bottom: calc(var(--status-h) + 12px);
   display: flex;
   flex-direction: column;
   background: var(--deck);
   border: 1px solid var(--rule);
+  transition: right 180ms ease;
+}
+
+body.has-inspector .viewctl {
+  right: calc(var(--rail-inspect) + 12px);
+}
+
+.zoom-readout {
+  display: block;
+  padding: 3px 0 4px;
+  border-top: 1px solid var(--rule-soft);
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  letter-spacing: 0.06em;
+  text-align: center;
+  color: var(--ink-faint);
 }
 
 .viewctl button {
@@ -1946,6 +1981,14 @@ body.is-paused .toasts {
 
   .viewctl button:first-child {
     border-left: 0;
+  }
+
+  .zoom-readout {
+    border-top: 0;
+    border-left: 1px solid var(--rule-soft);
+    padding: 0 8px;
+    display: grid;
+    place-items: center;
   }
 
   .toasts {

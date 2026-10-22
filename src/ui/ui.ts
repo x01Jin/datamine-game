@@ -70,6 +70,7 @@ export interface UiRefs {
   zoomIn: HTMLButtonElement;
   zoomOut: HTMLButtonElement;
   zoomFit: HTMLButtonElement;
+  zoomReadout: HTMLElement;
   sidebar: HTMLElement;
   sidebarClose: HTMLButtonElement;
   mobileBuild: HTMLButtonElement;
@@ -137,6 +138,7 @@ function cacheRefs(): UiRefs {
     zoomIn: byId<HTMLButtonElement>('zoom-in'),
     zoomOut: byId<HTMLButtonElement>('zoom-out'),
     zoomFit: byId<HTMLButtonElement>('zoom-fit'),
+    zoomReadout: byId('zoom-readout'),
     sidebar: byId('sidebar'),
     sidebarClose: byId<HTMLButtonElement>('sidebar-close'),
     mobileBuild: byId<HTMLButtonElement>('mobile-build'),
@@ -216,6 +218,7 @@ export class UI implements UIApi {
       const selection = this.app.view.selection;
       if (action === 'close') this.deselect();
       if (action === 'upgrade' && selection?.kind === 'node') this.app.upgradeNode(selection.id);
+      if (action === 'rotate' && selection?.kind === 'node') this.app.rotateNode(selection.id);
       if (action === 'dismantle' && selection?.kind === 'node') this.app.dismantleNode(selection.id);
       if (action === 'remove-link' && selection?.kind === 'link') this.app.removeLink(selection.id);
       if (action === 'add-anchor' && selection?.kind === 'link') this.app.addAnchorToSelection();
@@ -418,6 +421,7 @@ export class UI implements UIApi {
 
     if (bankTiers(this).join(',') !== this.bankKeyCache) renderBank(this, false);
     updateBankWidths(this, false);
+    setText(this.refs.zoomReadout, `${Math.round(state.camera.zoom * 100)}%`);
 
     for (const [tier, node] of this.bankAmounts) {
       const amount = bankOf(state, tier);
@@ -475,7 +479,7 @@ export class UI implements UIApi {
         this.closeInspector();
         return;
       }
-      key = `node:${node.id}:${node.level}:${state.links.length}:${state.unlockedTier}`;
+      key = `node:${node.id}:${node.level}:${node.kind === 'processor' ? (node.rot ?? 0) : 0}:${state.links.length}:${state.unlockedTier}`;
     } else if (selection.kind === 'anchor') {
       const link = linkById(state, selection.linkId);
       if (!link || !link.anchors?.[selection.index]) {
@@ -499,11 +503,13 @@ export class UI implements UIApi {
     }
     this.refs.inspector.classList.add('is-open');
     this.refs.inspector.inert = false;
+    document.body.classList.add('has-inspector');
   }
 
   private closeInspector(): void {
     this.refs.inspector.classList.remove('is-open');
     this.refs.inspector.inert = true;
+    document.body.classList.remove('has-inspector');
     this.lastSelectionKey = '';
   }
 

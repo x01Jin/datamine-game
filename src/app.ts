@@ -9,6 +9,7 @@ import {
   deepScan,
   dismantleNode,
   removeLinkAnchor,
+  rotateNode,
   removeLink,
   setLinkPriority,
   upgradeNode,
@@ -187,6 +188,10 @@ export class App implements GameApp {
 
   dismantleNode(id: number): boolean {
     return dismantleNode(this, id);
+  }
+
+  rotateNode(id: number): boolean {
+    return rotateNode(this, id);
   }
 
   removeLink(id: number): boolean {

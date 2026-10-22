@@ -4,3 +4,4 @@ AGENTS.md
 .codegraph/
 information/
 node_modules/
+dist/

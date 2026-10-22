@@ -6,6 +6,8 @@ export type NodeKind = 'extractor' | 'processor' | 'vault';
 
 export type Face = 'n' | 's' | 'e' | 'w';
 
+export type Rot = 0 | 1 | 2 | 3;
+
 export type Priority = 0.5 | 1 | 2;
 
 export interface Point {
@@ -47,6 +49,7 @@ export interface ProcessorNode extends Telemetry {
   id: number;
   kind: 'processor';
   tier: number;
+  rot: Rot;
   x: number;
   y: number;
   level: number;

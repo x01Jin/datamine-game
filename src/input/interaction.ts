@@ -398,6 +398,11 @@ export class Interaction {
       case 'g':
         this.app.toggleGridSnap();
         break;
+      case 'r': {
+        const selection = this.app.view.selection;
+        if (selection?.kind === 'node') this.app.rotateNode(selection.id);
+        break;
+      }
       case '+':
       case '=':
         this.app.zoomBy(1.2);

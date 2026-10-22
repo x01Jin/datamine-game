@@ -1,5 +1,5 @@
 import { recipeFor } from '../game/gamedata.ts';
-import type { Face, Link, MachineNode, Point, Vector } from '../game/types.ts';
+import type { Face, Link, MachineNode, Point, Rot, Vector } from '../game/types.ts';
 
 export const SIZES = {
   extractor: { w: 192, h: 96 },
@@ -20,6 +20,30 @@ const NORMALS: Record<Face, Vector> = {
   n: { dx: 0, dy: -1 },
   s: { dx: 0, dy: 1 },
 };
+
+// A quarter turn of the machine: the input face and the output face move together.
+const ROTATION_FACES: { in: Face; out: Face }[] = [
+  { in: 'w', out: 'e' },
+  { in: 'n', out: 's' },
+  { in: 'e', out: 'w' },
+  { in: 's', out: 'n' },
+];
+
+export const FACE_LABEL: Record<Face, string> = {
+  n: 'north',
+  s: 'south',
+  e: 'east',
+  w: 'west',
+};
+
+export function rotationOf(node: MachineNode): Rot {
+  return node.kind === 'processor' ? (node.rot ?? 0) : 0;
+}
+
+export function rotationFaces(node: MachineNode): { in: Face; out: Face } {
+  if (node.kind === 'processor') return ROTATION_FACES[rotationOf(node)];
+  return { in: 'w', out: 'e' };
+}
 
 export interface Port {
   dir: 'in' | 'out';
@@ -74,12 +98,19 @@ export function nodeBounds(node: MachineNode): Bounds {
 const PORT_CACHE = new Map<string, Port[]>();
 
 export function inputPorts(node: MachineNode): Port[] {
-  const key = node.kind === 'processor' ? `p:${node.tier}` : node.kind;
+  const key = node.kind === 'processor' ? `p:${node.tier}:${rotationOf(node)}` : node.kind;
   const cached = PORT_CACHE.get(key);
   if (cached) return cached;
   const ports = buildInputPorts(node);
   PORT_CACHE.set(key, ports);
   return ports;
+}
+
+function faceOffset(face: Face, along: number, w: number, h: number): { dx: number; dy: number } {
+  if (face === 'e') return { dx: w / 2, dy: along };
+  if (face === 'w') return { dx: -w / 2, dy: along };
+  if (face === 'n') return { dx: along, dy: -h / 2 };
+  return { dx: along, dy: h / 2 };
 }
 
 function buildInputPorts(node: MachineNode): Port[] {
@@ -95,34 +126,42 @@ function buildInputPorts(node: MachineNode): Port[] {
   if (node.kind !== 'processor') return [];
   const recipe = recipeFor(node.tier);
   if (!recipe) return [];
-  const dx = -SIZES.processor.w / 2;
-  return recipe.inputs.map((input, index) => ({
-    dir: 'in',
-    tier: input.tier,
-    index,
-    face: 'w',
-    dx,
-    dy: recipe.inputs.length === 1 ? 0 : -24 + index * 48,
-    universal: false,
-    amount: input.amount,
-  }));
+  const face = rotationFaces(node).in;
+  const count = recipe.inputs.length;
+  const spread = count === 1 ? 0 : 48;
+  const first = -((count - 1) * spread) / 2;
+  return recipe.inputs.map((input, index) => {
+    const offset = faceOffset(face, first + index * spread, SIZES.processor.w, SIZES.processor.h);
+    return {
+      dir: 'in',
+      tier: input.tier,
+      index,
+      face,
+      dx: offset.dx,
+      dy: offset.dy,
+      universal: false,
+      amount: input.amount,
+    };
+  });
 }
 
 const OUTPUT_CACHE = new Map<string, Port>();
 
 export function outputPort(node: MachineNode): Port | null {
   if (node.kind === 'vault') return null;
-  const key = node.kind === 'extractor' ? 'e' : `p:${node.tier}`;
+  const key = node.kind === 'extractor' ? 'e' : `p:${node.tier}:${rotationOf(node)}`;
   const cached = OUTPUT_CACHE.get(key);
   if (cached) return cached;
   const size = nodeSize(node);
+  const face = node.kind === 'extractor' ? 'e' : rotationFaces(node).out;
+  const offset = faceOffset(face, 0, size.w, size.h);
   const port: Port = {
     dir: 'out',
     tier: node.kind === 'extractor' ? 0 : node.tier,
     index: 0,
-    face: 'e',
-    dx: size.w / 2,
-    dy: 0,
+    face,
+    dx: offset.dx,
+    dy: offset.dy,
     universal: false,
   };
   OUTPUT_CACHE.set(key, port);
@@ -236,13 +275,17 @@ export function snapAnchor(
   return { x: px, y: py };
 }
 
-export function bezierPoints(from: Point, to: Point) {
-  const dx = to.x - from.x;
-  const offset = Math.max(54, Math.abs(dx) * 0.46);
+export function bezierPoints(from: Point, to: Point, fromFace: Face = 'e', toFace: Face = 'w') {
+  const fromNormal = NORMALS[fromFace] ?? NORMALS.e;
+  const toNormal = NORMALS[toFace] ?? NORMALS.w;
+  const dx = Math.abs(to.x - from.x);
+  const dy = Math.abs(to.y - from.y);
+  const fromOffset = Math.max(54, (fromNormal.dx !== 0 ? dx : dy) * 0.46);
+  const toOffset = Math.max(54, (toNormal.dx !== 0 ? dx : dy) * 0.46);
   return {
     a: from,
-    b: { x: from.x + offset, y: from.y },
-    c: { x: to.x - offset, y: to.y },
+    b: { x: from.x + fromNormal.dx * fromOffset, y: from.y + fromNormal.dy * fromOffset },
+    c: { x: to.x + toNormal.dx * toOffset, y: to.y + toNormal.dy * toOffset },
     d: to,
   };
 }
@@ -333,7 +376,7 @@ export function linkPath(link: Link, from: MachineNode, to: MachineNode): WirePa
   const anchors = link.anchors ?? [];
 
   if (anchors.length === 0) {
-    const curve = bezierPoints(a, d);
+    const curve = bezierPoints(a, d, outPort.face, inPort.face);
     return {
       kind: 'curve',
       curve,

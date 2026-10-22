@@ -11,6 +11,7 @@ import type {
   MachineNode,
   Point,
   ProcessorNode,
+  Rot,
   SaveState,
   State,
   VaultNode,
@@ -77,7 +78,7 @@ export function createInitialState(vertical = false): State {
   return state;
 }
 
-export function makeProcessor(id: number, tier: number, x: number, y: number): ProcessorNode {
+export function makeProcessor(id: number, tier: number, x: number, y: number, rot: Rot = 0): ProcessorNode {
   const recipe = recipeFor(tier);
   const inputs: { [tier: number]: number } = {};
   for (const input of recipe?.inputs ?? []) inputs[input.tier] = 0;
@@ -85,6 +86,7 @@ export function makeProcessor(id: number, tier: number, x: number, y: number): P
     id,
     kind: 'processor',
     tier,
+    rot,
     x,
     y,
     level: 1,
@@ -115,6 +117,7 @@ interface SnapshotNode {
   level: number;
   invested: Invested;
   tier?: number;
+  rot?: Rot;
   inputs?: { [tier: number]: number };
   out?: { tier: number; amount: number };
 }
@@ -136,6 +139,7 @@ function snapshot(state: State) {
       };
       if (node.kind === 'processor') {
         base.tier = node.tier;
+        base.rot = node.rot ?? 0;
         base.inputs = { ...node.inputs };
         base.out = { ...node.out };
       } else if (node.kind === 'extractor') {
@@ -232,6 +236,12 @@ function isSafeInteger(value: unknown): value is number {
 
 function isFace(value: unknown): value is Face {
   return value === 'n' || value === 's' || value === 'e' || value === 'w';
+}
+
+function normalizeRot(value: unknown): Rot {
+  const raw = finite(value, 0);
+  if (!Number.isFinite(raw)) return 0;
+  return (((Math.floor(raw) % 4) + 4) % 4) as Rot;
 }
 
 function normalize(data: unknown): State {
@@ -344,6 +354,7 @@ function normalize(data: unknown): State {
         level,
         invested,
         tier,
+        rot: normalizeRot(record.rot),
         out: { tier, amount: Math.min(MAX_AMOUNT, Math.max(0, finite(asRecord(record.out)?.amount, 0))) },
         inputs,
       };

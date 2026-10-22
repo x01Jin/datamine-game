@@ -18,6 +18,7 @@ Open http://localhost:5173. `npm run build` produces a static bundle in `dist/`;
 - The vault takes a wire on all four sides, so it can be fed from wherever the refinery grows.
 - Drag empty space to pan, scroll to zoom. Middle-drag or hold Space also pans.
 - Click a machine or wire to open its inspector. Upgrades are paid from the bank.
+- A forge can be turned: select it and press `R`, or use "Turn 90°" in its inspector. The input and output faces move together, and the wires follow.
 - Dismantling refunds the full build and upgrade cost. The vault and your final extractor are permanent anchors.
 - Bank one unit of a signal to reveal the next tier. Every forge consumes the two signals below it, so older tiers keep working.
 
@@ -50,6 +51,7 @@ The Ops tab holds two things.
 | `H`       | Fit the network                                                                      |
 | `B` / `C` | Build / Codex                                                                        |
 | `G`       | Toggle grid snap                                                                     |
+| `R`       | Turn the selected forge a quarter turn                                                |
 | `+` / `-` | Zoom                                                                                 |
 | `Esc`     | Cancel placement, wire, or selection                                                 |
 | `Delete`  | Dismantle the selected machine, cut the selected wire, or remove the selected anchor |

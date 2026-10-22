@@ -1,5 +1,5 @@
 import { Application, Container, Graphics, Sprite, TilingSprite, Texture, type Ticker } from 'pixi.js';
-import type { Camera, Link, MachineNode, Point, State, View } from '../game/types.ts';
+import type { Camera, Face, Link, MachineNode, Point, State, View } from '../game/types.ts';
 import type { Bounds } from '../layout/geometry.ts';
 import {
   GRID,
@@ -10,12 +10,13 @@ import {
   nodeBounds,
   nodeSize,
   outputPort,
+  rotationFaces,
   type WirePath,
 } from '../layout/geometry.ts';
 import { nodeStatus } from '../game/sim.ts';
 import { CONFIG, bufferCap, dataInfo, fmt, recipeFor, tierLabel } from '../game/gamedata.ts';
 import { CHROME, METRICS, STATUS_COLOR, tierBright, tierColor, tierDim } from './theme.ts';
-import { MONO, MONO_LG, MONO_SM, label } from './labels.ts';
+import { MONO, MONO_LG, MONO_SM, MONO_XL, label, setFontScale } from './labels.ts';
 import { backgroundTexture, glowTexture, glyphTexture, latticeTexture, vignetteTexture } from './textures.ts';
 
 interface NodeView {
@@ -32,6 +33,7 @@ interface NodeView {
   bar: Sprite;
   dot: Sprite;
   tier: number;
+  rot: number;
   kind: MachineNode['kind'];
   lastStatus: string;
   lastUtil: number;
@@ -42,6 +44,10 @@ interface NodeView {
 
 const PARTICLE_CAP = 420;
 const FIT_MAX_ZOOM = 1.25;
+
+function mod(value: number, span: number): number {
+  return ((value % span) + span) % span;
+}
 
 export class Board {
   readonly app = new Application();
@@ -62,7 +68,8 @@ export class Board {
   private bgGradient!: Sprite;
   private bgVignette!: Sprite;
   private bgLattice!: TilingSprite;
-  private gridGraphics = new Graphics();
+  private gridMinor = new Graphics();
+  private gridMajor = new Graphics();
   private wireGroups = new Map<number, Graphics>();
   private wireCasing = new Graphics();
   private overlayWires = new Graphics();
@@ -77,8 +84,6 @@ export class Board {
   private wireSignature = 0;
   private overlaySignature = '';
   private lastZoom = 0;
-  private lastGridX = Number.NaN;
-  private lastGridY = Number.NaN;
   private frameTimes: number[] = [];
   private lastFrame = 0;
   private quality = 1;
@@ -98,7 +103,7 @@ export class Board {
   }
 
   async init(): Promise<void> {
-    this.baseResolution = Math.min(window.devicePixelRatio || 1, 1.5);
+    this.baseResolution = Math.min(window.devicePixelRatio || 1, 2);
     await this.app.init({
       canvas: this.canvas,
       preference: 'webgl',
@@ -118,7 +123,7 @@ export class Board {
     this.bgLattice = new TilingSprite({ texture: latticeTexture(32), width: 10, height: 10 });
     this.bgLayer.addChild(this.bgGradient, this.bgLattice, this.bgVignette);
 
-    this.gridLayer.addChild(this.gridGraphics);
+    this.gridLayer.addChild(this.gridMinor, this.gridMajor);
 
     this.worldLayer.addChild(
       this.wireCasing,
@@ -196,41 +201,46 @@ export class Board {
 
   private rebuildGrid(): void {
     const zoom = this.cam.zoom;
-    const g = this.gridGraphics;
-    g.clear();
-
     const minor = GRID.cell * zoom;
+    const major = GRID.cell * 5 * zoom;
+
+    const g = this.gridMinor;
+    g.clear();
     const minorAlpha = Math.max(0, Math.min(1, (minor - 9) / 12)) * METRICS.gridAlpha;
     if (minorAlpha > 0.005) {
-      const origin = this.worldToScreen(0, 0);
-      const ox = (((origin.x % minor) + minor) % minor) - minor;
-      const oy = (((origin.y % minor) + minor) % minor) - minor;
-      for (let x = ox; x <= this.width; x += minor) {
-        g.moveTo(x, 0).lineTo(x, this.height);
+      const columns = Math.ceil(this.width / minor) + 2;
+      const rows = Math.ceil(this.height / minor) + 2;
+      for (let i = -1; i <= columns; i++) {
+        g.moveTo(i * minor, -minor).lineTo(i * minor, this.height + minor);
       }
-      for (let y = oy; y <= this.height; y += minor) {
-        g.moveTo(0, y).lineTo(this.width, y);
+      for (let i = -1; i <= rows; i++) {
+        g.moveTo(-minor, i * minor).lineTo(this.width + minor, i * minor);
       }
       g.stroke({ width: 1, color: 0x6f8ea6, alpha: minorAlpha });
     }
 
-    const major = GRID.cell * 5 * zoom;
+    const m = this.gridMajor;
+    m.clear();
     if (major >= 14) {
-      const origin = this.worldToScreen(0, 0);
-      const ox = (((origin.x % major) + major) % major) - major;
-      const oy = (((origin.y % major) + major) % major) - major;
-      for (let x = ox; x <= this.width; x += major) {
-        g.moveTo(x, 0).lineTo(x, this.height);
+      const columns = Math.ceil(this.width / major) + 2;
+      const rows = Math.ceil(this.height / major) + 2;
+      for (let i = -1; i <= columns; i++) {
+        m.moveTo(i * major, -major).lineTo(i * major, this.height + major);
       }
-      for (let y = oy; y <= this.height; y += major) {
-        g.moveTo(0, y).lineTo(this.width, y);
+      for (let i = -1; i <= rows; i++) {
+        m.moveTo(-major, i * major).lineTo(this.width + major, i * major);
       }
-      g.stroke({ width: 1, color: 0x8fb0c8, alpha: METRICS.gridAlpha * 1.6 });
+      m.stroke({ width: 1, color: 0x8fb0c8, alpha: METRICS.gridAlpha * 1.6 });
     }
   }
 
   private updateGridOffset(): void {
     const origin = this.worldToScreen(0, 0);
+    const zoom = this.cam.zoom;
+    const minor = GRID.cell * zoom;
+    const major = GRID.cell * 5 * zoom;
+    this.gridMinor.position.set(mod(origin.x, minor), mod(origin.y, minor));
+    this.gridMajor.position.set(mod(origin.x, major), mod(origin.y, major));
     this.bgLattice.tilePosition.set(origin.x % 32, origin.y % 32);
   }
 
@@ -245,6 +255,7 @@ export class Board {
       mix(node.x);
       mix(node.y);
       mix(node.level);
+      mix(node.kind === 'processor' ? (node.rot ?? 0) : 0);
     }
     for (const link of this.state.links) {
       mix(link.id);
@@ -343,11 +354,11 @@ export class Board {
     const glyph = new Sprite(glyphTexture(this.glyphShape(node)));
     glyph.anchor.set(0.5);
     const title = label('', { font: MONO, size: 11 });
-    const sub = label('', { font: MONO_SM, size: 9 });
-    const status = label('', { font: MONO_SM, size: 9 });
-    const detail = label('', { font: MONO_SM, size: 9 });
-    const util = label('', { font: MONO_SM, size: 9, anchorX: 1 });
-    const compact = label('', { font: MONO_LG, size: 13, anchorX: 0.5 });
+    const sub = label('', { font: MONO_SM, size: 10 });
+    const status = label('', { font: MONO_SM, size: 10 });
+    const detail = label('', { font: MONO_SM, size: 10 });
+    const util = label('', { font: MONO_SM, size: 10, anchorX: 1 });
+    const compact = label('', { font: MONO_XL, size: 17, anchorX: 0.5 });
     const value = label('', { font: MONO_LG, size: 22, anchorX: 0.5, anchorY: 0.5 });
     const bar = new Sprite(Texture.WHITE);
     bar.anchor.set(0, 0.5);
@@ -370,6 +381,7 @@ export class Board {
       bar,
       dot,
       tier: node.kind === 'processor' ? node.tier : 0,
+      rot: node.kind === 'processor' ? (node.rot ?? 0) : 0,
       kind: node.kind,
       lastStatus: '',
       lastUtil: -1,
@@ -424,7 +436,7 @@ export class Board {
       color: CHROME.rule,
       alpha: 0.9,
     });
-    g.rect(b.left + 1, b.top + 1, 2.5, b.h - 2).fill({ color: accent, alpha: 0.85 });
+    this.paintEdge(g, b, rotationFaces(node).in, accent);
     g.moveTo(b.left + 12, b.top + 37)
       .lineTo(b.right - 12, b.top + 37)
       .stroke({ width: 1, color: CHROME.ruleSoft, alpha: 1 });
@@ -445,12 +457,12 @@ export class Board {
     view.title.position.set(b.left + 38, b.top + 11);
 
     view.sub.text = node.kind === 'extractor' ? 'EXTRACTOR' : `FORGE ${this.tierTag(node)}`;
-    view.sub.tint = CHROME.inkFaint;
+    view.sub.tint = CHROME.inkDim;
     view.sub.position.set(b.left + 38, b.top + 24);
 
     view.compact.text = node.kind === 'extractor' ? 'RAW' : this.tierTag(node);
     view.compact.tint = accent;
-    view.compact.position.set(0, b.top + 34);
+    view.compact.position.set(0, b.top + 38);
 
     view.status.position.set(b.left + 26, b.top + 44);
     view.detail.position.set(b.left + 12, b.top + 60);
@@ -464,8 +476,24 @@ export class Board {
     view.glyph.visible = !compact;
     view.compact.visible = compact;
     view.bar.visible = !compact;
-    view.dot.visible = !compact;
+    view.dot.visible = true;
     view.value.visible = false;
+  }
+
+  private paintEdge(g: Graphics, b: Bounds, face: Face, color: number): void {
+    if (face === 'e') {
+      g.rect(b.right - 3.5, b.top + 1, 2.5, b.h - 2).fill({ color, alpha: 0.85 });
+      return;
+    }
+    if (face === 'n') {
+      g.rect(b.left + 1, b.top + 1, b.w - 2, 2.5).fill({ color, alpha: 0.85 });
+      return;
+    }
+    if (face === 's') {
+      g.rect(b.left + 1, b.bottom - 3.5, b.w - 2, 2.5).fill({ color, alpha: 0.85 });
+      return;
+    }
+    g.rect(b.left + 1, b.top + 1, 2.5, b.h - 2).fill({ color, alpha: 0.85 });
   }
 
   private tierName(node: MachineNode): string {
@@ -563,9 +591,11 @@ export class Board {
       view.root.visible = true;
       view.root.position.set(node.x, node.y);
       const tier = node.kind === 'processor' ? node.tier : 0;
-      if (view.tier !== tier || view.kind !== node.kind) {
+      const rot = node.kind === 'processor' ? (node.rot ?? 0) : 0;
+      if (view.tier !== tier || view.kind !== node.kind || view.rot !== rot) {
         view.tier = tier;
         view.kind = node.kind;
+        view.rot = rot;
         view.lastStatus = '';
         view.lastDetail = '';
         view.lastLevel = -1;
@@ -610,7 +640,10 @@ export class Board {
       view.status.tint = STATUS_COLOR[status] ?? CHROME.inkFaint;
       view.dot.tint = STATUS_COLOR[status] ?? CHROME.inkFaint;
     }
-    view.dot.position.set(b.left + 17, b.top + 47);
+    view.dot.position.set(
+      view.compactMode ? b.left + 15 : b.left + 17,
+      view.compactMode ? b.top + 15 : b.top + 47,
+    );
     view.dot.width = 9;
     view.dot.height = 9;
 
@@ -619,7 +652,7 @@ export class Board {
     if (percent !== view.lastUtil) {
       view.lastUtil = percent;
       view.util.text = `${percent}%`;
-      view.util.tint = CHROME.inkFaint;
+      view.util.tint = CHROME.inkDim;
       const cap = this.bufferCapFor(node);
       const ratio = Math.max(0, Math.min(1, (node.out?.amount ?? 0) / (cap || 1)));
       const barLeft = b.left + 12;
@@ -636,7 +669,7 @@ export class Board {
     if (detail !== view.lastDetail) {
       view.lastDetail = detail;
       view.detail.text = detail;
-      view.detail.tint = CHROME.inkFaint;
+      view.detail.tint = CHROME.inkDim;
     }
 
     if (node.level !== view.lastLevel) {
@@ -707,6 +740,12 @@ export class Board {
     return `${ghost.kind}:${ghost.tier ?? ''}:${ghost.x}:${ghost.y}:${ghost.valid ? 1 : 0}`;
   }
 
+  private hoverKey(): string {
+    const hover = this.view.hoverPort;
+    if (!hover) return '';
+    return `${hover.nodeId}:${hover.dir}:${hover.index}`;
+  }
+
   private drawOverlays(): void {
     const activeDraft = this.view.linkDraft;
     const selection = this.view.selection;
@@ -718,7 +757,7 @@ export class Board {
           : '';
     const key = activeDraft
       ? `d:${activeDraft.fromId}:${activeDraft.points.length}:${activeDraft.targetId ?? ''}:${activeDraft.targetFace ?? ''}:${activeDraft.targetTier ?? ''}:${activeDraft.targetPos?.x ?? ''}:${activeDraft.targetPos?.y ?? ''}:${activeDraft.x}:${activeDraft.y}:${this.wireSignature}`
-      : `s:${selectionKey}:${this.ghostKey()}:${this.wireSignature}`;
+      : `s:${selectionKey}:${this.ghostKey()}:${this.hoverKey()}:${this.wireSignature}`;
     if (key === this.overlaySignature) return;
     this.overlaySignature = key;
 
@@ -775,6 +814,20 @@ export class Board {
       const anchor = link?.anchors[selection.index];
       if (anchor) {
         g.rect(anchor.x - 4, anchor.y - 4, 8, 8).fill({ color: CHROME.ink, alpha: 0.95 });
+      }
+    }
+
+    const hover = this.view.hoverPort;
+    if (hover) {
+      const node = this.state.nodes.find((candidate) => candidate.id === hover.nodeId);
+      const port =
+        node && hover.dir === 'out' ? outputPort(node) : node ? inputPorts(node)[hover.index] : null;
+      if (port) {
+        g.rect(port.dx - 6.5, port.dy - 6.5, 13, 13).stroke({
+          width: 1.6,
+          color: CHROME.ink,
+          alpha: 0.95,
+        });
       }
     }
 
@@ -850,16 +903,10 @@ export class Board {
 
   render(now: number): void {
     this.governQuality(now);
-    const origin = this.worldToScreen(0, 0);
-    if (
-      Math.abs(this.cam.zoom - this.lastZoom) > 0.0005 ||
-      Math.abs(origin.x - this.lastGridX) > 0.01 ||
-      Math.abs(origin.y - this.lastGridY) > 0.01
-    ) {
+    if (Math.abs(this.cam.zoom - this.lastZoom) > 0.0005) {
       this.lastZoom = this.cam.zoom;
-      this.lastGridX = origin.x;
-      this.lastGridY = origin.y;
       this.rebuildGrid();
+      setFontScale(this.cam.zoom * this.baseResolution);
     }
     const cam = this.cam;
     this.worldLayer.scale.set(cam.zoom);
@@ -877,22 +924,22 @@ export class Board {
     this.lastFrame = now;
     if (this.frameTimes.length < 90) return;
     let total = 0;
-    for (const time of this.frameTimes) total += time;
+    let fastest = Infinity;
+    for (const time of this.frameTimes) {
+      total += time;
+      if (time < fastest) fastest = time;
+    }
     const average = total / this.frameTimes.length;
-    if (average > 26 && this.quality > 0.6) {
+    const floor = Math.max(6, fastest);
+    if (average > floor * 1.6 && this.quality > 0.6) {
       this.setQuality(this.quality === 1 ? 0.75 : 0.6);
-    } else if (average > 19 && this.quality === 1) {
-      this.setQuality(0.75);
-    } else if (average < 13 && this.quality < 1) {
+    } else if (average < floor * 1.2 && this.quality < 1) {
       this.setQuality(this.quality === 0.6 ? 0.75 : 1);
     }
   }
 
   private setQuality(quality: number): void {
     this.quality = quality;
-    const resolution = Math.max(0.6, this.baseResolution * quality);
-    this.app.renderer.resolution = resolution;
-    this.app.renderer.resize(this.width, this.height, resolution);
     this.particleCap = Math.round(PARTICLE_CAP * Math.max(0.35, quality));
     this.frameTimes.length = 0;
   }

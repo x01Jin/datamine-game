@@ -34,6 +34,7 @@ import type {
   Point,
   Priority,
   ProcessorNode,
+  Rot,
   State,
 } from './types.ts';
 import { MAX_ANCHORS } from './types.ts';
@@ -179,6 +180,19 @@ export function upgradeNode(app: App, id: number): boolean {
   addInvested(node, cost);
   node.level += 1;
   app.audio.upgrade();
+  app.afterChange();
+  return true;
+}
+
+export function rotateNode(app: App, id: number): boolean {
+  const node = nodeById(app.state, id);
+  if (!node || node.kind !== 'processor') {
+    app.audio.deny();
+    app.toast({ text: 'Only forges can be turned.', tone: 'bad', quiet: true });
+    return false;
+  }
+  node.rot = (((node.rot ?? 0) + 1) % 4) as Rot;
+  app.audio.click();
   app.afterChange();
   return true;
 }
