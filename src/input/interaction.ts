@@ -100,6 +100,7 @@ export class Interaction {
 
   private onPointerDown = (event: PointerEvent): void => {
     if (event.button !== 0 && event.button !== 1) return;
+    this.app.board.cancelFocus();
     this.lastScreen = { x: event.clientX, y: event.clientY };
     this.press = { x: event.clientX, y: event.clientY };
     this.canvas.setPointerCapture?.(event.pointerId);
@@ -135,6 +136,7 @@ export class Interaction {
         this.beginWire(portHit.node, portHit.port, p);
       } else {
         this.app.ui?.select({ kind: 'node', id: portHit.node.id });
+        this.app.focusNode(portHit.node.id);
       }
       return;
     }
@@ -143,6 +145,7 @@ export class Interaction {
     if (node) {
       this.app.ui?.select({ kind: 'node', id: node.id });
       if (node.kind === 'vault') {
+        this.app.focusNode(node.id);
         this.mode = null;
         return;
       }
@@ -259,7 +262,7 @@ export class Interaction {
       if (this.drag.moved) {
         this.app.saveSoon();
       } else {
-        this.app.revealSelection({ kind: 'node', id: this.drag.node.id });
+        this.app.focusNode(this.drag.node.id);
       }
       this.drag = null;
       this.app.view.dragCell = null;

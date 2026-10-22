@@ -29,6 +29,7 @@ interface NodeView {
   status: ReturnType<typeof label>;
   detail: ReturnType<typeof label>;
   util: ReturnType<typeof label>;
+  level: ReturnType<typeof label>;
   compact: ReturnType<typeof label>;
   value: ReturnType<typeof label>;
   bar: Sprite;
@@ -45,9 +46,14 @@ interface NodeView {
 
 const PARTICLE_CAP = 420;
 const FIT_MAX_ZOOM = 1.25;
+const FOCUS_MS = 420;
 
 function mod(value: number, span: number): number {
   return ((value % span) + span) % span;
+}
+
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 }
 
 export class Board {
@@ -75,6 +81,8 @@ export class Board {
   private wireCasing = new Graphics();
   private overlayWires = new Graphics();
   private overlayChrome = new Graphics();
+  private highlightChrome = new Graphics();
+  private highlightWires = new Graphics();
   private overlayText = new Container();
   private particlePool: Sprite[] = [];
   private particleTextures: Texture[] = [];
@@ -84,6 +92,20 @@ export class Board {
   private anchorList: { linkId: number; index: number; x: number; y: number }[] = [];
   private wireSignature = 0;
   private overlaySignature = '';
+  private highlightKey = '';
+  private highlightLinks: Link[] = [];
+  private highlightNodes: { node: MachineNode; color: number }[] = [];
+  private highlightDrawn = false;
+  private highlightChanged = false;
+  private focusTween: {
+    startX: number;
+    startY: number;
+    startZoom: number;
+    targetX: number;
+    targetY: number;
+    targetZoom: number;
+    startedAt: number;
+  } | null = null;
   private lastZoom = 0;
   private frameTimes: number[] = [];
   private lastFrame = 0;
@@ -133,7 +155,13 @@ export class Board {
       this.particleLayer,
       this.overlayLayer,
     );
-    this.overlayLayer.addChild(this.overlayChrome, this.overlayWires, this.overlayText);
+    this.overlayLayer.addChild(
+      this.overlayChrome,
+      this.overlayWires,
+      this.highlightChrome,
+      this.highlightWires,
+      this.overlayText,
+    );
 
     this.app.stage.addChild(this.bgLayer, this.gridLayer, this.worldLayer);
 
@@ -146,6 +174,7 @@ export class Board {
   }
 
   resize(): void {
+    this.cancelFocus();
     this.width = window.innerWidth;
     this.height = window.innerHeight;
     this.bgGradient.width = this.width;
@@ -174,6 +203,7 @@ export class Board {
   }
 
   zoomAt(screenX: number, screenY: number, factor: number): void {
+    this.cancelFocus();
     const before = this.screenToWorld(screenX, screenY);
     this.cam.zoom = Math.min(CONFIG.zoomMax, Math.max(CONFIG.zoomMin, this.cam.zoom * factor));
     const after = this.screenToWorld(screenX, screenY);
@@ -181,23 +211,71 @@ export class Board {
     this.cam.y += before.y - after.y;
   }
 
+  private safeFrame(): { left: number; right: number; top: number; bottom: number } {
+    const narrow = this.width <= 900;
+    return {
+      left: narrow ? 16 : 330,
+      right: narrow ? 16 : this.view.selection ? 340 : 90,
+      top: narrow ? 76 : 92,
+      bottom: narrow ? 150 : 60,
+    };
+  }
+
   fit(nodes: MachineNode[] = this.state.nodes): void {
+    this.cancelFocus();
     if (!nodes.length) return;
     const b = boundsOfNodes(nodes);
-    const narrow = this.width <= 900;
-    const left = narrow ? 16 : 330;
-    const right = narrow ? 16 : this.view.selection ? 340 : 90;
-    const top = narrow ? 76 : 92;
-    const bottom = narrow ? 150 : 60;
-    const availW = Math.max(200, this.width - left - right);
-    const availH = Math.max(240, this.height - top - bottom);
+    const frame = this.safeFrame();
+    const availW = Math.max(200, this.width - frame.left - frame.right);
+    const availH = Math.max(240, this.height - frame.top - frame.bottom);
     const zoom = Math.min(
       FIT_MAX_ZOOM,
       Math.max(CONFIG.zoomMin, Math.min(availW / (b.right - b.left + 60), availH / (b.bottom - b.top + 60))),
     );
     this.cam.zoom = zoom;
-    this.cam.x = (b.left + b.right) / 2 - (left + availW / 2 - this.width / 2) / zoom;
-    this.cam.y = (b.top + b.bottom) / 2 - (top + availH / 2 - this.height / 2) / zoom;
+    this.cam.x = (b.left + b.right) / 2 - (frame.left + availW / 2 - this.width / 2) / zoom;
+    this.cam.y = (b.top + b.bottom) / 2 - (frame.top + availH / 2 - this.height / 2) / zoom;
+  }
+
+  focusNode(node: MachineNode): void {
+    const frame = this.safeFrame();
+    const availW = Math.max(1, this.width - frame.left - frame.right);
+    const availH = Math.max(1, this.height - frame.top - frame.bottom);
+    const cam = this.cam;
+    const targetX = node.x - (frame.left + availW / 2 - this.width / 2);
+    const targetY = node.y - (frame.top + availH / 2 - this.height / 2);
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      this.focusTween = null;
+      cam.x = targetX;
+      cam.y = targetY;
+      cam.zoom = 1;
+      return;
+    }
+    this.focusTween = {
+      startX: cam.x,
+      startY: cam.y,
+      startZoom: cam.zoom,
+      targetX,
+      targetY,
+      targetZoom: 1,
+      startedAt: performance.now(),
+    };
+  }
+
+  cancelFocus(): void {
+    this.focusTween = null;
+  }
+
+  private updateFocus(now: number): void {
+    const tween = this.focusTween;
+    if (!tween) return;
+    const t = Math.min(1, Math.max(0, (now - tween.startedAt) / FOCUS_MS));
+    const k = easeInOutCubic(t);
+    const cam = this.cam;
+    cam.x = tween.startX + (tween.targetX - tween.startX) * k;
+    cam.y = tween.startY + (tween.targetY - tween.startY) * k;
+    cam.zoom = tween.startZoom + (tween.targetZoom - tween.startZoom) * k;
+    if (t >= 1) this.focusTween = null;
   }
 
   private rebuildGrid(): void {
@@ -260,6 +338,8 @@ export class Board {
     }
     for (const link of this.state.links) {
       mix(link.id);
+      mix(link.from);
+      mix(link.to);
       mix(link.tier);
       mix(link.anchors.length);
       for (const anchor of link.anchors) {
@@ -359,6 +439,7 @@ export class Board {
     const status = label('', { font: MONO_SM, size: 10 });
     const detail = label('', { font: MONO_SM, size: 10 });
     const util = label('', { font: MONO_SM, size: 10, anchorX: 1 });
+    const level = label('', { font: MONO_SM, size: 10, anchorX: 1 });
     const compact = label('', { font: MONO_XL, size: 17, anchorX: 0.5 });
     const value = label('', { font: MONO_LG, size: 22, anchorX: 0.5, anchorY: 0.5 });
     const bar = new Sprite(Texture.WHITE);
@@ -366,7 +447,7 @@ export class Board {
     const dot = new Sprite(this.particleTextures[1] ?? glowTexture(16));
     dot.anchor.set(0.5);
 
-    root.addChild(frame, bar, dot, glyph, title, sub, status, detail, util, compact, value);
+    root.addChild(frame, bar, dot, glyph, title, sub, status, detail, util, level, compact, value);
 
     const view: NodeView = {
       root,
@@ -377,6 +458,7 @@ export class Board {
       status,
       detail,
       util,
+      level,
       compact,
       value,
       bar,
@@ -468,6 +550,10 @@ export class Board {
     view.status.position.set(b.left + 26, b.top + 44);
     view.detail.position.set(b.left + 12, b.top + 60);
     view.util.position.set(b.right - 12, b.top + 44);
+    view.level.text = `L${node.level}`;
+    view.level.tint = tierColor(tier);
+    view.level.position.set(b.right - 12, b.top + 11);
+    view.level.visible = node.kind === 'processor';
 
     view.status.visible = !compact;
     view.detail.visible = !compact;
@@ -565,6 +651,7 @@ export class Board {
     view.status.text = '';
     view.util.text = '';
     view.compact.text = '';
+    view.level.visible = false;
     view.glyph.visible = false;
     view.title.visible = true;
     view.sub.visible = false;
@@ -675,7 +762,7 @@ export class Board {
 
     if (node.level !== view.lastLevel) {
       view.lastLevel = node.level;
-      view.sub.text = node.kind === 'extractor' ? 'EXTRACTOR' : `FORGE ${this.tierTag(node)}`;
+      view.level.text = `L${node.level}`;
     }
   }
 
@@ -893,6 +980,124 @@ export class Board {
     }
   }
 
+  private syncHighlightSelection(): boolean {
+    const selection = this.view.selection;
+    const key = selection?.kind === 'node' ? `${selection.id}:${this.wireSignature}` : '';
+    this.highlightChanged = key !== this.highlightKey;
+    if (!this.highlightChanged) return key !== '';
+    this.highlightKey = key;
+    this.highlightLinks = [];
+    this.highlightNodes = [];
+    if (selection?.kind !== 'node') return false;
+    const node = this.state.nodes.find((candidate) => candidate.id === selection.id);
+    if (!node) return false;
+    const neighbors = new Map<number, { node: MachineNode; color: number }>();
+    for (const link of this.state.links) {
+      if (link.from !== node.id && link.to !== node.id) continue;
+      this.highlightLinks.push(link);
+      const otherId = link.from === node.id ? link.to : link.from;
+      if (neighbors.has(otherId)) continue;
+      const other = this.state.nodes.find((candidate) => candidate.id === otherId);
+      if (other) neighbors.set(other.id, { node: other, color: tierBright(link.tier) });
+    }
+    this.highlightNodes = [...neighbors.values()];
+    return true;
+  }
+
+  private paintHighlightChrome(): void {
+    const g = this.highlightChrome;
+    g.clear();
+    for (const entry of this.highlightNodes) {
+      const b = nodeBounds(entry.node);
+      g.roundRect(b.left - 10, b.top - 10, b.w + 20, b.h + 20, METRICS.cardRadius + 6).stroke({
+        width: 6,
+        color: entry.color,
+        alpha: 0.2,
+      });
+      g.roundRect(b.left - 4, b.top - 4, b.w + 8, b.h + 8, METRICS.cardRadius + 1).stroke({
+        width: 2.2,
+        color: entry.color,
+        alpha: 0.95,
+      });
+      g.roundRect(b.left, b.top, b.w, b.h, METRICS.cardRadius).fill({
+        color: entry.color,
+        alpha: 0.055,
+      });
+      const corner = 13;
+      const m = 7;
+      g.moveTo(b.left - m, b.top - m + corner)
+        .lineTo(b.left - m, b.top - m)
+        .lineTo(b.left - m + corner, b.top - m)
+        .stroke({ width: 2.4, color: entry.color, alpha: 0.95, cap: 'round', join: 'round' });
+      g.moveTo(b.right + m - corner, b.top - m)
+        .lineTo(b.right + m, b.top - m)
+        .lineTo(b.right + m, b.top - m + corner)
+        .stroke({ width: 2.4, color: entry.color, alpha: 0.95, cap: 'round', join: 'round' });
+      g.moveTo(b.right + m, b.bottom + m - corner)
+        .lineTo(b.right + m, b.bottom + m)
+        .lineTo(b.right + m - corner, b.bottom + m)
+        .stroke({ width: 2.4, color: entry.color, alpha: 0.95, cap: 'round', join: 'round' });
+      g.moveTo(b.left - m + corner, b.bottom + m)
+        .lineTo(b.left - m, b.bottom + m)
+        .lineTo(b.left - m, b.bottom + m - corner)
+        .stroke({ width: 2.4, color: entry.color, alpha: 0.95, cap: 'round', join: 'round' });
+    }
+    for (const link of this.highlightLinks) {
+      const path = this.paths.get(link.id);
+      if (!path) continue;
+      this.tracePath(g, path);
+      g.stroke({
+        width: METRICS.wireWidth + 3,
+        color: tierBright(link.tier),
+        alpha: 0.3,
+        cap: 'round',
+        join: 'round',
+      });
+    }
+  }
+
+  private drawHighlights(now: number): void {
+    const active = this.syncHighlightSelection();
+    if (!active) {
+      if (this.highlightDrawn) {
+        this.highlightChrome.clear();
+        this.highlightWires.clear();
+        this.highlightDrawn = false;
+      }
+      return;
+    }
+    if (!this.highlightDrawn) {
+      this.highlightChrome.clear();
+      this.highlightWires.clear();
+      this.highlightDrawn = true;
+    }
+    if (this.highlightChanged) this.paintHighlightChrome();
+
+    const wave = 0.5 + 0.5 * Math.sin(now * 0.006);
+    this.highlightChrome.alpha = 0.55 + wave * 0.45;
+    const w = this.highlightWires;
+    w.clear();
+    for (const link of this.highlightLinks) {
+      const path = this.paths.get(link.id);
+      if (!path) continue;
+      const color = tierBright(link.tier);
+      for (let i = 0; i < 3; i++) {
+        const t = (now / 1300 + i / 3 + link.id * 0.071) % 1;
+        const point = path.at(t);
+        const fade = Math.sin(Math.PI * t);
+        if (fade <= 0.02) continue;
+        if (t > 0.04) {
+          const tail = path.at(t - 0.035);
+          w.moveTo(tail.x, tail.y)
+            .lineTo(point.x, point.y)
+            .stroke({ width: 3.4, color: CHROME.ink, alpha: 0.5 * fade, cap: 'round' });
+        }
+        w.circle(point.x, point.y, 8).fill({ color, alpha: 0.2 * fade });
+        w.circle(point.x, point.y, 3).fill({ color: CHROME.ink, alpha: 0.95 * fade });
+      }
+    }
+  }
+
   sync(): void {
     const wireKey = this.wireKey();
     if (wireKey !== this.wireSignature) {
@@ -905,6 +1110,7 @@ export class Board {
 
   render(now: number): void {
     this.governQuality(now);
+    this.updateFocus(now);
     if (Math.abs(this.cam.zoom - this.lastZoom) > 0.0005) {
       this.lastZoom = this.cam.zoom;
       this.rebuildGrid();
@@ -916,6 +1122,7 @@ export class Board {
     this.updateGridOffset();
     this.updateParticles();
     this.drawOverlays();
+    this.drawHighlights(now);
   }
 
   private governQuality(now: number): void {

@@ -295,42 +295,11 @@ export class App implements GameApp {
     this.saveSoon();
   }
 
-  revealSelection(selection: Selection): void {
-    if (window.innerWidth <= 900 || selection?.kind !== 'node') return;
-    const node = nodeById(this.state, selection.id);
+  focusNode(id: number): void {
+    const node = nodeById(this.state, id);
     if (!node) return;
-    const half = 96;
-    const halfHeight = node.kind === 'vault' ? 96 : 48;
-    const a = this.board.worldToScreen(node.x - half, node.y - halfHeight);
-    const b = this.board.worldToScreen(node.x + half, node.y + halfHeight);
-    const safeLeft = 330;
-    const safeRight = window.innerWidth - 342;
-    const safeTop = 82;
-    const safeBottom = window.innerHeight - 72;
-    if (safeRight - safeLeft < 80) return;
-
-    const cam = this.state.camera;
-    let dx = 0;
-    let dy = 0;
-    if (b.x - a.x > safeRight - safeLeft) {
-      dx = (a.x + b.x) / 2 - (safeLeft + safeRight) / 2;
-    } else if (b.x > safeRight) {
-      dx = b.x - safeRight;
-    } else if (a.x < safeLeft) {
-      dx = a.x - safeLeft;
-    }
-    if (b.y - a.y > safeBottom - safeTop) {
-      dy = (a.y + b.y) / 2 - (safeTop + safeBottom) / 2;
-    } else if (b.y > safeBottom) {
-      dy = b.y - safeBottom;
-    } else if (a.y < safeTop) {
-      dy = a.y - safeTop;
-    }
-    if (dx || dy) {
-      cam.x += dx / cam.zoom;
-      cam.y += dy / cam.zoom;
-      this.saveSoon();
-    }
+    this.board.focusNode(node);
+    this.saveSoon();
   }
 
   exportSave(): void {

@@ -17,7 +17,7 @@ Open http://localhost:5173. `npm run build` produces a static bundle in `dist/`;
 - Click a machine's output port, then click the board to lay out wire points, then click an input port to make the wire. Right-click undoes the last point, Esc cancels the wire. Dragging from a port to a port still works.
 - The vault takes a wire on all four sides, so it can be fed from wherever the refinery grows.
 - Drag empty space to pan, scroll to zoom. Middle-drag or hold Space also pans.
-- Click a machine or wire to open its inspector. Upgrades are paid from the bank.
+- Click a machine or wire to open its inspector. Selecting a machine centres it at 100% and lights up everything wired to it, in and out. Processor cards show their level in the top-right corner. Upgrades are paid from the bank.
 - A forge can be turned: select it and press `R`, or use "Turn 90°" in its inspector. The input and output faces move together, and the wires follow.
 - Dismantling refunds the full build and upgrade cost. The vault and your final extractor are permanent anchors.
 - Bank one unit of a signal to reveal the next tier. Every forge consumes the two signals below it, so older tiers keep working.
