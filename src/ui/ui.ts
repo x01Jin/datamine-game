@@ -479,7 +479,11 @@ export class UI implements UIApi {
         this.closeInspector();
         return;
       }
-      key = `node:${node.id}:${node.level}:${node.kind === 'processor' ? (node.rot ?? 0) : 0}:${state.links.length}:${state.unlockedTier}`;
+      const wiring = state.links
+        .filter((link) => link.from === node.id || link.to === node.id)
+        .map((link) => `${link.from}>${link.to}`)
+        .join(',');
+      key = `node:${node.id}:${node.level}:${node.kind === 'processor' ? (node.rot ?? 0) : 0}:${wiring}:${state.unlockedTier}`;
     } else if (selection.kind === 'anchor') {
       const link = linkById(state, selection.linkId);
       if (!link || !link.anchors?.[selection.index]) {
@@ -495,7 +499,7 @@ export class UI implements UIApi {
         this.closeInspector();
         return;
       }
-      key = `link:${link.id}:${link.tier}:${link.priority}:${link.anchors.length}:${state.unlockedTier}`;
+      key = `link:${link.id}:${link.from}>${link.to}:${link.tier}:${link.priority}:${link.anchors.length}:${state.unlockedTier}`;
     }
     if (force || key !== this.lastSelectionKey) {
       this.lastSelectionKey = key;

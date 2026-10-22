@@ -14,7 +14,15 @@ import { canAfford, creditsLabel } from '../game/actions.ts';
 import { linkById, nodeById } from '../game/state.ts';
 import { nodeStatus } from '../game/sim.ts';
 import { GRID, FACE_LABEL, rotationFaces } from '../layout/geometry.ts';
-import type { Cost, Link, MachineNode, Selection } from '../game/types.ts';
+import type {
+  Cost,
+  ExtractorNode,
+  Link,
+  MachineNode,
+  ProcessorNode,
+  Selection,
+  State,
+} from '../game/types.ts';
 import { escapeHtml, glyphSvg, recipeMarkup, sortedBy, statusLabel, tierHex, tierVars } from './dom.ts';
 import type { UI } from './ui.ts';
 
@@ -52,6 +60,14 @@ export interface VaultLedger {
   types: number;
   units: number;
 }
+
+interface WireEnd {
+  dir: 'in' | 'out';
+  tier: number;
+  name: string;
+}
+
+const WIRE_LIMIT = 3;
 
 export function buildInspector(ui: UI, selection: Selection): void {
   const state = ui.app.state;
@@ -111,16 +127,16 @@ export function holdingsHtml(entries: VaultEntry[]): string {
     .join('');
 }
 
-function buildNode(ui: UI, node: MachineNode): void {
+function buildNode(ui: UI, node: ExtractorNode | ProcessorNode): void {
   const state = ui.app.state;
   const root = ui.refs.inspector;
   const isExtractor = node.kind === 'extractor';
-  const tier = isExtractor ? 0 : node.kind === 'processor' ? node.tier : 0;
+  const tier = isExtractor ? 0 : node.tier;
   const info = dataInfo(tier);
   const title = isExtractor ? 'Extractor' : `${info.name} Forge`;
   const kicker = isExtractor ? `Miner · ${tierLabel(0)}` : `Forge · ${tierLabel(tier)}`;
   const status = nodeStatus(state, node);
-  const util = (node as { _util?: number })._util || 0;
+  const util = node._util || 0;
   const cap = bufferCap(state, node);
   const speed = speedOf(state, node);
   const cost = upgradeCost(node);
@@ -129,17 +145,14 @@ function buildNode(ui: UI, node: MachineNode): void {
 
   tierVars(root, tier);
 
-  const recipe = isExtractor ? null : recipeFor(tier);
-  let recipeHtml: string;
-  let recipeNote: string;
-  if (isExtractor) {
-    recipeHtml = '<span class="t">Raw Noise</span><span class="muted">from the network</span>';
-    recipeNote = 'Mines raw noise continuously. Raw noise buys extractors and feeds the first forge.';
-  } else {
-    recipeHtml = recipeMarkup(tier);
-    const cycle = (recipe?.cycle ?? CONFIG.processorCycle) / speed;
-    recipeNote = `One cycle every ${fmt(cycle)}s. Buffer holds ${fmt(cap)} of each stream.`;
-  }
+  const recipe = isExtractor ? null : recipeFor(node.tier);
+  const cycle = recipe ? recipe.cycle / speed : 0;
+  const recipeLine = isExtractor
+    ? '<span class="t">Raw Noise</span><span class="muted">from the network</span>'
+    : recipeMarkup(tier);
+  const recipeTitle = isExtractor
+    ? 'Mines raw noise continuously. Raw noise buys extractors and feeds the first forge.'
+    : `One cycle every ${fmt(cycle)}s. Buffer holds ${fmt(cap)} of each stream.`;
 
   const bars: string[] = [];
   if (recipe) {
@@ -149,27 +162,34 @@ function buildNode(ui: UI, node: MachineNode): void {
           `in-${input.tier}`,
           `${tierLabel(input.tier)} in`,
           tierHex(input.tier),
-          (node.kind === 'processor' ? node.inputs[input.tier] : 0) || 0,
+          node.kind === 'processor' ? node.inputs[input.tier] || 0 : 0,
           cap,
         ),
       );
     }
   }
-  const outAmount = node.kind === 'processor' || node.kind === 'extractor' ? node.out.amount : 0;
-  bars.push(barRow('out', isExtractor ? 'out' : 'output', tierHex(tier), outAmount, cap));
+  bars.push(barRow('out', isExtractor ? 'out' : 'output', tierHex(tier), node.out.amount, cap));
 
   const faces = rotationFaces(node);
-  const rotationBlock =
-    node.kind === 'processor'
-      ? `<section class="insp-block">
-          <div class="insp-label">Orientation</div>
-          <div class="rot-row">
-            <button class="btn btn-quiet" data-action="rotate" type="button" title="Turn 90° (R)">Turn 90°</button>
-            <span class="rot-readout">${escapeHtml(FACE_LABEL[faces.in])} in · ${escapeHtml(FACE_LABEL[faces.out])} out</span>
-          </div>
-          <p class="insp-note">Turns the input and output faces. Attached wires follow the new ports.</p>
-        </section>`
-      : '';
+  const stats = isExtractor
+    ? ''
+    : statCell(
+        'Face',
+        `${faces.in.toUpperCase()}→${faces.out.toUpperCase()}`,
+        '',
+        `${FACE_LABEL[faces.in]} in · ${FACE_LABEL[faces.out]} out`,
+      );
+  const statGrid = [
+    stats,
+    statCell('Rate', fmtRate(nominalRate(state, node)), '', 'Theoretical output at full speed'),
+    statCell('Out', fmtRate(node._flowOut || 0), 'flow', 'Actual output rate'),
+    statCell('Level', `L${node.level}`, '', `Overclock level ${node.level} · ×${fmt(speed)} speed`),
+  ].join('');
+
+  const actions = isExtractor
+    ? `<button class="btn btn-danger" data-action="dismantle" type="button" title="Refund ${escapeHtml(creditsLabel(node.invested))}. Wires attached to this machine are removed.">Dismantle</button>`
+    : `<button class="btn btn-quiet" data-action="rotate" type="button" title="Turn 90° (R). Attached wires follow the new ports.">Turn 90°</button>
+       <button class="btn btn-danger" data-action="dismantle" type="button" title="Refund ${escapeHtml(creditsLabel(node.invested))}. Wires attached to this machine are removed.">Dismantle</button>`;
 
   root.innerHTML = `
     <div class="insp-head">
@@ -179,9 +199,8 @@ function buildNode(ui: UI, node: MachineNode): void {
         <svg aria-hidden="true"><use href="#i-close"></use></svg>
       </button>
     </div>
-    <div class="insp-scroll">
-      <section class="insp-block">
-        <div class="insp-label">Status</div>
+    <div class="insp-body">
+      <section class="insp-sec">
         <div class="status-row is-${status}" data-live="status">
           <span class="status-dot" aria-hidden="true"></span>
           <span class="status-text">${escapeHtml(statusLabel(status))}</span>
@@ -190,47 +209,42 @@ function buildNode(ui: UI, node: MachineNode): void {
         <div class="meter"><i data-live="util" style="width:${Math.min(100, util * 100)}%"></i></div>
       </section>
 
-      <section class="insp-block">
+      <section class="insp-sec">
         <div class="insp-label">Recipe</div>
-        <div class="recipe-line">${recipeHtml}</div>
-        <p class="insp-note">${escapeHtml(recipeNote)}</p>
+        <div class="recipe-line" title="${escapeHtml(recipeTitle)}">${recipeLine}${
+          isExtractor
+            ? ''
+            : `<span class="recipe-meta">${cycle < 0.005 ? '&lt;0.01' : fmt(cycle)}s/cycle</span>`
+        }</div>
       </section>
 
-      <section class="insp-block">
+      <section class="insp-sec">
         <div class="insp-label">Buffers</div>
         <div class="bars">${bars.join('')}</div>
       </section>
 
-      ${rotationBlock}
-
-      <section class="insp-block">
-        <div class="insp-label">Flow</div>
-        <div class="kv">
-          <div class="kv-row"><span>Nominal</span><b>${fmtRate(nominalRate(state, node))}</b></div>
-          <div class="kv-row"><span>Outbound</span><b data-live="flow">${fmtRate((node as { _flowOut?: number })._flowOut || 0)}</b></div>
-          <div class="kv-row"><span>Level</span><b>L${node.level} · ×${fmt(speed)} speed</b></div>
-        </div>
+      <section class="insp-sec">
+        <div class="insp-label">Wiring</div>
+        ${wiringHtml(state, node)}
       </section>
 
-      <section class="insp-block">
-        <div class="insp-label">Overclock</div>
-        <div class="upgrade-box">
-          <div class="upgrade-top"><span>${atMax ? `Level ${node.level}` : `Level ${node.level} → ${node.level + 1}`}</span><b>${atMax ? 'MAX' : '+50% speed'}</b></div>
-          <button class="btn btn-primary btn-block" data-action="upgrade" type="button" ${can ? '' : 'disabled'}>
-            <span>${atMax ? 'Fully overclocked' : 'Overclock'}</span>${atMax ? '' : `<span class="price">${fmt(cost.amount)} ${escapeHtml(dataInfo(cost.tier).name)}</span>`}
-          </button>
-          <p class="insp-note">${atMax ? 'This machine cannot be overclocked further.' : `Cost doubles each level · paid in ${escapeHtml(dataInfo(cost.tier).name)}`}</p>
-        </div>
+      <section class="insp-sec">
+        <div class="stat-grid">${statGrid}</div>
       </section>
-
-      <section class="insp-block">
-        <div class="insp-label">Salvage</div>
-        <button class="btn btn-danger btn-icon-label" data-action="dismantle" type="button" title="Refund: ${escapeHtml(creditsLabel(node.invested))}">
-          <svg aria-hidden="true"><use href="#i-trash"></use></svg>
-          <span>Dismantle · refund ${escapeHtml(creditsLabel(node.invested))}</span>
-        </button>
-        <p class="insp-note">Full refund. Wires attached to this machine are removed.</p>
-      </section>
+    </div>
+    <div class="insp-foot">
+      <button class="btn btn-primary btn-block" data-action="upgrade" type="button" ${can ? '' : 'disabled'} title="${
+        atMax
+          ? 'This machine cannot be overclocked further.'
+          : `Cost doubles each level. Paid in ${dataInfo(cost.tier).name}.`
+      }">
+        <span>${atMax ? 'Fully overclocked' : `Overclock → L${node.level + 1}`}</span>${
+          atMax
+            ? ''
+            : `<span class="price">${fmt(cost.amount)} ${escapeHtml(dataInfo(cost.tier).name)}</span>`
+        }
+      </button>
+      <div class="insp-actions">${actions}</div>
     </div>
   `;
 
@@ -284,9 +298,8 @@ function buildVault(ui: UI, node: MachineNode): void {
         <svg aria-hidden="true"><use href="#i-close"></use></svg>
       </button>
     </div>
-    <div class="insp-scroll">
-      <section class="insp-block">
-        <div class="insp-label">Status</div>
+    <div class="insp-body">
+      <section class="insp-sec">
         <div class="status-row is-${status}" data-live="status">
           <span class="status-dot" aria-hidden="true"></span>
           <span class="status-text">${status === 'receiving' ? 'Receiving' : 'Idle'}</span>
@@ -294,31 +307,25 @@ function buildVault(ui: UI, node: MachineNode): void {
         </div>
       </section>
 
-      <section class="insp-block">
-        <div class="insp-label">Ledger</div>
-        <div class="kv">
-          <div class="kv-row"><span>Signal types</span><b data-live="types">${ledger.types}</b></div>
-          <div class="kv-row"><span>Units held</span><b data-live="units">${fmt(ledger.units)}</b></div>
-          <div class="kv-row"><span>Incoming</span><b data-live="incoming">${fmtRate(incoming)}</b></div>
-          <div class="kv-row"><span>Wires</span><b>${wires}</b></div>
+      <section class="insp-sec">
+        <div class="stat-grid">
+          ${statCell('Types', String(ledger.types), 'types', 'Signal types held')}
+          ${statCell('Units', fmt(ledger.units), 'units', 'Total units held')}
+          ${statCell('In', fmtRate(incoming), 'incoming', 'Incoming rate')}
+          ${statCell('Wires', String(wires), '', 'Wires feeding the vault')}
         </div>
-        <p class="insp-note">Each signal type is tracked separately. Units of one type are not interchangeable with another.</p>
       </section>
 
-      <section class="insp-block">
+      <section class="insp-sec">
         <div class="insp-label">Holdings</div>
         <div class="kv" data-live="holdings">${holdingsHtml(ledger.entries.slice(0, 6))}</div>
       </section>
 
-      <section class="insp-block">
+      <section class="insp-sec">
         <div class="insp-label">Deposit</div>
-        <div class="recipe-line"><span class="t">Any signal</span><span class="muted">→</span><span class="out">banked</span></div>
-        <p class="insp-note">The vault accepts every tier. Banked data is currency and can never be lost.</p>
-      </section>
-
-      <section class="insp-block">
-        <div class="insp-label">Anchor</div>
-        <p class="insp-note">The vault is permanent. It cannot be dismantled or moved. It holds the entire bank.</p>
+        <div class="recipe-line" title="The vault accepts every tier. Banked data is currency and can never be lost.">
+          <span class="t">Any signal</span><span class="muted">→</span><span class="out">banked</span>
+        </div>
       </section>
     </div>
   `;
@@ -339,16 +346,8 @@ function buildLink(ui: UI, link: Link | null, anchorIndex = -1): void {
   const info = dataInfo(link.tier);
   const from = nodeById(state, link.from);
   const to = nodeById(state, link.to);
-  const fromName = from
-    ? from.kind === 'extractor'
-      ? 'Extractor'
-      : dataInfo(from.kind === 'processor' ? from.tier : 0).name
-    : '?';
-  const toName = to
-    ? to.kind === 'vault'
-      ? 'The Vault'
-      : `${dataInfo(to.kind === 'processor' ? to.tier : 0).name} Forge`
-    : '?';
+  const fromName = from ? machineName(from) : '?';
+  const toName = to ? machineName(to) : '?';
   const sourceRate = from ? nominalRate(state, from) : 0;
   const anchors = link.anchors || [];
   const anchor = anchorIndex >= 0 ? anchors[anchorIndex] : null;
@@ -358,11 +357,12 @@ function buildLink(ui: UI, link: Link | null, anchorIndex = -1): void {
 
   const anchorBlock = anchor
     ? `
-      <section class="insp-block">
+      <section class="insp-sec">
         <div class="insp-label">Anchor ${anchorIndex + 1}</div>
-        <div class="kv">
-          <div class="kv-row"><span>Position</span><b>${Math.round(anchor.x)}, ${Math.round(anchor.y)}</b></div>
-          <div class="kv-row"><span>Grid</span><b>${anchor.x % GRID.cell === 0 && anchor.y % GRID.cell === 0 ? 'snapped' : 'free'}</b></div>
+        <div class="stat-grid">
+          ${statCell('X', String(Math.round(anchor.x)))}
+          ${statCell('Y', String(Math.round(anchor.y)))}
+          ${statCell('Grid', anchor.x % GRID.cell === 0 && anchor.y % GRID.cell === 0 ? 'snapped' : 'free')}
         </div>
         <div class="nudge-row">
           <button class="btn btn-quiet" data-action="nudge-anchor" data-dx="-1" data-dy="0" type="button" aria-label="Nudge anchor left">←</button>
@@ -370,11 +370,10 @@ function buildLink(ui: UI, link: Link | null, anchorIndex = -1): void {
           <button class="btn btn-quiet" data-action="nudge-anchor" data-dx="0" data-dy="-1" type="button" aria-label="Nudge anchor up">↑</button>
           <button class="btn btn-quiet" data-action="nudge-anchor" data-dx="0" data-dy="1" type="button" aria-label="Nudge anchor down">↓</button>
         </div>
-        <button class="btn btn-danger btn-icon-label" data-action="remove-anchor" type="button">
+        <button class="btn btn-danger btn-block" data-action="remove-anchor" type="button">
           <svg aria-hidden="true"><use href="#i-trash"></use></svg>
-          <span>Remove this anchor</span>
+          <span>Remove anchor</span>
         </button>
-        <p class="insp-note">Drag the handle on the board, or nudge it here. Right-click a handle removes it.</p>
       </section>
     `
     : '';
@@ -387,57 +386,111 @@ function buildLink(ui: UI, link: Link | null, anchorIndex = -1): void {
         <svg aria-hidden="true"><use href="#i-close"></use></svg>
       </button>
     </div>
-    <div class="insp-scroll">
-      <section class="insp-block">
+    <div class="insp-body">
+      <section class="insp-sec">
         <div class="insp-label">Route</div>
         <div class="link-route">
           <span>${escapeHtml(fromName)}</span>
           <i class="route-line" aria-hidden="true"></i>
           <span>${escapeHtml(toName)}</span>
         </div>
-        <div class="kv">
-          <div class="kv-row"><span>Anchors</span><b>${anchors.length}</b></div>
-        </div>
         <div class="insp-actions">
-          <button class="btn btn-quiet" data-action="add-anchor" type="button">Add anchor</button>
+          <button class="btn btn-quiet" data-action="add-anchor" type="button" title="Add a route point between the two machines, then drag it into place.">Add anchor</button>
           <button class="btn btn-quiet" data-action="clear-route" type="button" ${anchors.length ? '' : 'disabled'}>Clear route</button>
         </div>
-        <p class="insp-note">Click an output port, then click the board to lay out points, then click an input port. Double-click a wire to drop an anchor. Right-click a handle removes it.</p>
       </section>
 
       ${anchorBlock}
 
-      <section class="insp-block">
+      <section class="insp-sec">
         <div class="insp-label">Priority</div>
         <div class="seg" role="group" aria-label="Wire priority">
           <button class="seg-btn${priority === 0.5 ? ' is-active' : ''}" data-action="set-priority" data-priority="0.5" type="button">Low</button>
           <button class="seg-btn${priority === 1 ? ' is-active' : ''}" data-action="set-priority" data-priority="1" type="button">Normal</button>
           <button class="seg-btn${priority === 2 ? ' is-active' : ''}" data-action="set-priority" data-priority="2" type="button">High</button>
         </div>
-        <p class="insp-note">When one output feeds several inputs, each wire takes a share of the flow. High priority wires are served first.</p>
       </section>
 
-      <section class="insp-block">
-        <div class="insp-label">Throughput</div>
-        <div class="link-flow" data-live="link-flow">${fmtRate((link as { _flow?: number })._flow || 0)}</div>
-        <div class="kv">
-          <div class="kv-row"><span>Source nominal</span><b>${fmtRate(sourceRate)}</b></div>
-          <div class="kv-row"><span>Payload</span><b>${escapeHtml(info.name)}</b></div>
+      <section class="insp-sec">
+        <div class="stat-grid">
+          ${statCell('Rate', fmtRate((link as { _flow?: number })._flow || 0), 'link-flow', 'Flow through this wire')}
+          ${statCell('Source', fmtRate(sourceRate), '', 'Nominal rate of the feeding machine')}
+          ${statCell('Anchors', String(anchors.length), '', 'Route points on this wire')}
         </div>
       </section>
-
-      <section class="insp-block">
-        <div class="insp-label">Remove</div>
-        <button class="btn btn-danger btn-icon-label" data-action="remove-link" type="button">
-          <svg aria-hidden="true"><use href="#i-trash"></use></svg>
-          <span>Cut this wire</span>
-        </button>
-        <p class="insp-note">The machines stay online. Nothing is refunded for wires.</p>
-      </section>
+    </div>
+    <div class="insp-foot">
+      <button class="btn btn-danger btn-block" data-action="remove-link" type="button">
+        <svg aria-hidden="true"><use href="#i-trash"></use></svg>
+        <span>Cut this wire</span>
+      </button>
     </div>
   `;
 
   ui.live.linkFlow = root.querySelector('[data-live="link-flow"]');
+}
+
+function machineName(node: MachineNode): string {
+  if (node.kind === 'vault') return 'The Vault';
+  if (node.kind === 'extractor') return 'Raw Noise Extractor';
+  return `${dataInfo(node.tier).name} Forge`;
+}
+
+function wiringRows(state: State, node: MachineNode): WireEnd[] {
+  const rows: WireEnd[] = [];
+  const seen = new Set<number>();
+  for (const link of state.links) {
+    if (link.to !== node.id || seen.has(link.from)) continue;
+    const source = nodeById(state, link.from);
+    if (!source) continue;
+    seen.add(link.from);
+    rows.push({ dir: 'in', tier: link.tier, name: machineName(source) });
+  }
+  seen.clear();
+  for (const link of state.links) {
+    if (link.from !== node.id || seen.has(link.to)) continue;
+    const target = nodeById(state, link.to);
+    if (!target) continue;
+    seen.add(link.to);
+    rows.push({ dir: 'out', tier: link.tier, name: machineName(target) });
+  }
+  return rows;
+}
+
+function wiringHtml(state: State, node: MachineNode): string {
+  const rows = wiringRows(state, node);
+  if (!rows.length) {
+    return '<p class="insp-note">No wires attached. Connect an output port to this machine.</p>';
+  }
+  const inbound = rows.filter((row) => row.dir === 'in');
+  const outbound = rows.filter((row) => row.dir === 'out');
+  const lines: string[] = [];
+  for (const group of [inbound, outbound]) {
+    if (!group.length) continue;
+    for (const row of group.slice(0, WIRE_LIMIT)) {
+      lines.push(wireRow(row));
+    }
+    if (group.length > WIRE_LIMIT) {
+      lines.push(
+        `<div class="wire-row wire-more"><span class="wire-dir"></span><span>+${group.length - WIRE_LIMIT} more</span></div>`,
+      );
+    }
+  }
+  return `<div class="wiring">${lines.join('')}</div>`;
+}
+
+function wireRow(row: WireEnd): string {
+  return `<div class="wire-row">
+    <span class="wire-dir">${row.dir === 'in' ? 'IN' : 'OUT'}</span>
+    <i class="wire-dot" style="background:${tierHex(row.tier)}"></i>
+    <span class="wire-name">${escapeHtml(row.name)}</span>
+  </div>`;
+}
+
+function statCell(label: string, value: string, live = '', title = ''): string {
+  const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
+  const liveAttr = live ? ` data-live="${live}"` : '';
+  return `<div class="stat"${titleAttr}><span class="stat-k">${escapeHtml(label)}</span><span class="stat-v"${liveAttr}>${escapeHtml(value)}</span></div>`;
 }
 
 function barRow(key: string, label: string, color: string, amount: number, cap: number): string {

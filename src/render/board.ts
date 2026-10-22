@@ -10,6 +10,7 @@ import {
   nodeBounds,
   nodeSize,
   outputPort,
+  portWorldPos,
   rotationFaces,
   type WirePath,
 } from '../layout/geometry.ts';
@@ -822,8 +823,9 @@ export class Board {
       const node = this.state.nodes.find((candidate) => candidate.id === hover.nodeId);
       const port =
         node && hover.dir === 'out' ? outputPort(node) : node ? inputPorts(node)[hover.index] : null;
-      if (port) {
-        g.rect(port.dx - 6.5, port.dy - 6.5, 13, 13).stroke({
+      if (node && port) {
+        const at = portWorldPos(node, port);
+        g.rect(at.x - 6.5, at.y - 6.5, 13, 13).stroke({
           width: 1.6,
           color: CHROME.ink,
           alpha: 0.95,
