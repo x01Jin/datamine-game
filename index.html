@@ -10,13 +10,13 @@
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23080a0d'/%3E%3Cpath d='M16 4 28 16 16 28 4 16Z' fill='none' stroke='%23c9a63c' stroke-width='2'/%3E%3Crect x='13' y='13' width='6' height='6' fill='%23c9a63c'/%3E%3C/svg%3E"
     />
     <link rel="stylesheet" href="./fonts.css" />
-    <script type="module" crossorigin src="./assets/index-CzDDbj1v.js"></script>
+    <script type="module" crossorigin src="./assets/index-u3yv8PEL.js"></script>
     <link rel="modulepreload" crossorigin href="./assets/CanvasPool-C4ThUl8l.js">
     <link rel="modulepreload" crossorigin href="./assets/canvasUtils-q1xKtjJE.js">
     <link rel="modulepreload" crossorigin href="./assets/RenderTargetSystem-BgMCy9nS.js">
     <link rel="modulepreload" crossorigin href="./assets/getTextureBatchBindGroup-CGbevIp6.js">
     <link rel="modulepreload" crossorigin href="./assets/getTexelRangeRects-Dpsnz5ah.js">
-    <link rel="stylesheet" crossorigin href="./assets/index-OK05WWFV.css">
+    <link rel="stylesheet" crossorigin href="./assets/index-BDh5HlKR.css">
   </head>
   <body>
     <svg class="svg-defs" aria-hidden="true" focusable="false">
@@ -211,12 +211,6 @@
         <div class="section-label">Fabrication</div>
         <div class="build-list" id="build-list"></div>
         <div class="lock-note" id="next-lock"></div>
-        <p class="panel-tip">
-          <span class="desktop-only"
-            >Pick a machine, then click the board. Hold shift to keep the tool armed.</span
-          >
-          <span class="mobile-only">Pick a machine, then tap the board to place it.</span>
-        </p>
       </div>
 
       <div class="panel-scroll" id="ops-view" role="tabpanel" aria-labelledby="tab-ops" tabindex="0" hidden>
@@ -224,7 +218,8 @@
         <div class="dispatch" id="directive-list"></div>
         <div class="section-label">Core exchange</div>
         <div class="core-balance">
-          <span class="core-glyph" aria-hidden="true"></span><b id="core-balance">0</b><small>cores</small>
+          <span class="core-label">Core balance</span>
+          <b id="core-balance">0</b>
         </div>
         <div class="core-list" id="core-list"></div>
         <div class="deep-scan">
@@ -247,10 +242,6 @@
       </div>
 
       <div class="panel-foot">
-        <span id="node-count">2 nodes</span>
-        <span class="foot-sep" aria-hidden="true"></span>
-        <span id="link-count">0 links</span>
-        <span class="grow"></span>
         <span id="tier-readout">T00</span>
       </div>
     </aside>
@@ -325,9 +316,14 @@
     </div>
 
     <footer class="statusbar" id="statusbar">
-      <span class="status-tag">LOCAL INSTANCE</span>
-      <span class="status-mid" id="status-mid"></span>
-      <span class="status-tag">AUTOSAVE <b id="save-state">READY</b></span>
+      <span>
+        <span id="node-count">2 nodes</span
+        ><span class="status-sep" aria-hidden="true">·</span><span id="link-count">0 links</span>
+      </span>
+      <span class="grow"></span>
+      <span class="save-state" id="save-indicator">
+        <span class="save-dot" aria-hidden="true"></span><b id="save-state">Ready</b>
+      </span>
     </footer>
 
     <div class="boot-error" id="boot-error" role="alert" hidden></div>
