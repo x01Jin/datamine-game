@@ -3,3 +3,4 @@ AGENTS.md
 .playwright-mcp/
 .codegraph/
 information/
+node_modules/

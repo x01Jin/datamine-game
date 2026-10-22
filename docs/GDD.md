@@ -10,11 +10,11 @@ Build a refinery that reads like a circuit board, keep it fed, and push it deepe
 
 Idle games are not about the click. They are about three different time horizons, and a design fails when only one of them is tuned.
 
-| Horizon | What the player feels | System |
-| --- | --- | --- |
-| Seconds | "I made that happen." | Wiring, routing, priority, overclock |
-| Minutes | "I am getting somewhere." | Directives, tier unlocks |
-| Hours | "I am stronger than I was." | Deep scan, core exchange, offline catch-up |
+| Horizon | What the player feels       | System                                     |
+| ------- | --------------------------- | ------------------------------------------ |
+| Seconds | "I made that happen."       | Wiring, routing, priority, overclock       |
+| Minutes | "I am getting somewhere."   | Directives, tier unlocks                   |
+| Hours   | "I am stronger than I was." | Deep scan, core exchange, offline catch-up |
 
 DATAMINE has one system per horizon. The first hour of play has to work on all three at once, so the moment-to-moment system cannot just be "click a button", and the long-term system cannot just be "the number goes up".
 
@@ -32,7 +32,7 @@ bank enough of a signal to reveal the next tier
 the next tier costs more, so the layout has to get smarter
 ```
 
-The loop only works if the player can *see* the problem. A machine labelled STARVED is a question with an answer; a machine labelled RUNNING while the numbers crawl is a dead end. The board, the inspector and the Ops board all show the same status vocabulary for this reason (`nodeStatus()` in `sim.js` is the single source).
+The loop only works if the player can _see_ the problem. A machine labelled STARVED is a question with an answer; a machine labelled RUNNING while the numbers crawl is a dead end. The board, the inspector and the Ops board all show the same status vocabulary for this reason (`nodeStatus()` in `src/game/sim.ts` is the single source).
 
 ## The three tiers of play
 
@@ -43,7 +43,7 @@ Two verbs make the refinery feel authored rather than assembled:
 - **Placing** snaps to a grid. The board turns into a floor plan with rows and columns, and a player who plans two steps ahead can see the shape of a factory before building it. Machines and wires share that grid, so a port and a route point always meet.
 - **Routing** lets a wire carry points. A routed wire is a decision: it goes around the machines, it makes the flow legible, it can be dragged into a shape that reads at a glance. Points are laid down one click at a time from the output port, which keeps the wire on the grid the whole way.
 
-Neither of these change the economy. They change how the player *sees* the economy, which is what makes an idle board worth looking at.
+Neither of these change the economy. They change how the player _sees_ the economy, which is what makes an idle board worth looking at.
 
 ### Minutes: directives
 
@@ -55,7 +55,7 @@ Without objectives the player asks "what now?" and the answer is "wait for the n
 - reach a deeper tier
 - bank signal types you have never banked
 
-Progress is measured against a snapshot taken when the order was issued, so an order always means "do this *now*", never "do this again". They pay in banked signal and, for the harder ones, in cores.
+Progress is measured against a snapshot taken when the order was issued, so an order always means "do this _now_", never "do this again". They pay in banked signal and, for the harder ones, in cores.
 
 ### Hours: deep scan
 
@@ -82,9 +82,9 @@ Names and shapes are procedural past the curated ten, so the archive keeps produ
 
 The cost curves are tuned against a reference network (one chain forge per tier, one extractor each, everything banking) and measured from a headless run of the real simulation:
 
-| Tier | T01 | T02 | T03 | T04 | T05 | T06 | T07 | T08 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Seconds to bank | 3 | 4 | 6 | 12 | 23 | 46 | 87 | 156 |
+| Tier            | T01 | T02 | T03 | T04 | T05 | T06 | T07 | T08 |
+| --------------- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Seconds to bank | 3   | 4   | 6   | 12  | 23  | 46  | 87  | 156 |
 
 Each tier costs roughly 1.8x the previous one, which is the classic incremental curve: the wait grows, the machine count grows with it, and a deep scan is the answer to a wait that gets too long.
 

@@ -5,10 +5,11 @@ A browser-only signal refinery. Extract raw noise, wire it through forges, and b
 ## Run it
 
 ```bash
-npm start
+npm install
+npm run dev
 ```
 
-Open http://localhost:5173. No install step, no build step, no external assets. Saves live in `localStorage` and are written while you play.
+Open http://localhost:5173. `npm run build` produces a static bundle in `dist/`; `npm run preview` serves it.
 
 ## Play
 
@@ -42,16 +43,16 @@ The Ops tab holds two things.
 
 ## Controls
 
-| Key | Action |
-| --- | --- |
-| `P` | Pause / resume |
-| `M` | Mute / unmute |
-| `H` | Fit the network |
-| `B` / `C` | Build / Codex |
-| `G` | Toggle grid snap |
-| `+` / `-` | Zoom |
-| `Esc` | Cancel placement, wire, or selection |
-| `Delete` | Dismantle the selected machine, cut the selected wire, or remove the selected anchor |
+| Key       | Action                                                                               |
+| --------- | ------------------------------------------------------------------------------------ |
+| `P`       | Pause / resume                                                                       |
+| `M`       | Mute / unmute                                                                        |
+| `H`       | Fit the network                                                                      |
+| `B` / `C` | Build / Codex                                                                        |
+| `G`       | Toggle grid snap                                                                     |
+| `+` / `-` | Zoom                                                                                 |
+| `Esc`     | Cancel placement, wire, or selection                                                 |
+| `Delete`  | Dismantle the selected machine, cut the selected wire, or remove the selected anchor |
 
 Touch: drag to pan, pinch to zoom, tap to select.
 
@@ -66,9 +67,12 @@ Touch: drag to pan, pinch to zoom, tap to select.
 ## Development
 
 ```bash
-npm test
+npm test           # node --test, Node strips the TypeScript natively
+npm run typecheck  # tsc --noEmit
+npm run lint       # oxlint
+npm run format     # oxfmt
 ```
 
-Tests cover the data ladder, save normalization, the simulation step, placement / wiring / refund behavior, wire routing and priority, and the Ops board. The source is plain ES modules under `src/`; `serve.js` is a small static server used only for local development.
+The board is WebGL (PixiJS v8) and everything around it is DOM. The simulation, save format and economy are pure TypeScript with no DOM dependency, so the test suite runs in plain Node.
 
 `docs/GDD.md` explains the design: the loop, the progression, and why each system exists.

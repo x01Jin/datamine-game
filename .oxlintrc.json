@@ -1,0 +1,49 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "env": {
+    "browser": true,
+    "es2024": true
+  },
+  "ignorePatterns": [
+    "dist",
+    "node_modules",
+    ".codegraph",
+    "public",
+    "legacy",
+    "src/actions.js",
+    "src/audio.js",
+    "src/autosave.js",
+    "src/directives.js",
+    "src/dom.js",
+    "src/gamedata.js",
+    "src/glyphs.js",
+    "src/inspector.js",
+    "src/interaction.js",
+    "src/layout.js",
+    "src/main.js",
+    "src/panels.js",
+    "src/render.js",
+    "src/sim.js",
+    "src/state.js",
+    "src/ui.js"
+  ],
+  "rules": {
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "off",
+    "no-console": "off",
+    "unicorn/no-array-fill-with-reference-type": "off",
+    "unicorn/require-post-message-target-origin": "off",
+    "no-underscore-dangle": [
+      "warn",
+      {
+        "allow": ["_flow", "_flowOut", "_moved", "_util", "_cycles", "_cost", "__datamine"]
+      }
+    ]
+  }
+}
