@@ -75,11 +75,11 @@ export class App implements GameApp {
 
   saveSoon(): void {
     if (this.conflict) {
-      this.ui?.setSaveState('CONFLICT');
+      this.ui?.setSaveState('Conflict');
       return;
     }
     if (this.saveTimer) clearTimeout(this.saveTimer);
-    this.ui?.setSaveState('UNSAVED');
+    this.ui?.setSaveState('Unsaved');
     this.saveTimer = setTimeout(() => this.saveNow(), DEBOUNCE_MS);
   }
 
@@ -89,7 +89,7 @@ export class App implements GameApp {
       this.saveTimer = null;
     }
     if (force !== true && this.conflict) {
-      this.ui?.setSaveState('CONFLICT');
+      this.ui?.setSaveState('Conflict');
       return false;
     }
     if (force !== true && this.lastPersistedAt) {
@@ -101,13 +101,13 @@ export class App implements GameApp {
     }
     const writtenAt = saveGame(this.state);
     if (!writtenAt) {
-      this.ui?.setSaveState('SAVE FAILED', false);
+      this.ui?.setSaveState('Save failed', false);
       return false;
     }
     this.lastPersistedAt = writtenAt;
     this.state.savedAt = writtenAt;
     this.conflict = false;
-    this.ui?.setSaveState('SAVED', true);
+    this.ui?.setSaveState('Saved', true);
     return true;
   }
 
@@ -124,7 +124,7 @@ export class App implements GameApp {
 
   private flagConflict(): void {
     this.conflict = true;
-    this.ui?.setSaveState('CONFLICT');
+    this.ui?.setSaveState('Conflict');
     this.ui?.toast({
       text: 'Autosave paused: this instance changed in another tab.',
       sub: 'Reload to continue from the newer save.',

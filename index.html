@@ -205,12 +205,6 @@
         <div class="section-label">Fabrication</div>
         <div class="build-list" id="build-list"></div>
         <div class="lock-note" id="next-lock"></div>
-        <p class="panel-tip">
-          <span class="desktop-only"
-            >Pick a machine, then click the board. Hold shift to keep the tool armed.</span
-          >
-          <span class="mobile-only">Pick a machine, then tap the board to place it.</span>
-        </p>
       </div>
 
       <div class="panel-scroll" id="ops-view" role="tabpanel" aria-labelledby="tab-ops" tabindex="0" hidden>
@@ -218,7 +212,8 @@
         <div class="dispatch" id="directive-list"></div>
         <div class="section-label">Core exchange</div>
         <div class="core-balance">
-          <span class="core-glyph" aria-hidden="true"></span><b id="core-balance">0</b><small>cores</small>
+          <span class="core-label">Core balance</span>
+          <b id="core-balance">0</b>
         </div>
         <div class="core-list" id="core-list"></div>
         <div class="deep-scan">
@@ -241,10 +236,6 @@
       </div>
 
       <div class="panel-foot">
-        <span id="node-count">2 nodes</span>
-        <span class="foot-sep" aria-hidden="true"></span>
-        <span id="link-count">0 links</span>
-        <span class="grow"></span>
         <span id="tier-readout">T00</span>
       </div>
     </aside>
@@ -319,9 +310,14 @@
     </div>
 
     <footer class="statusbar" id="statusbar">
-      <span class="status-tag">LOCAL INSTANCE</span>
-      <span class="status-mid" id="status-mid"></span>
-      <span class="status-tag">AUTOSAVE <b id="save-state">READY</b></span>
+      <span>
+        <span id="node-count">2 nodes</span
+        ><span class="status-sep" aria-hidden="true">·</span><span id="link-count">0 links</span>
+      </span>
+      <span class="grow"></span>
+      <span class="save-state" id="save-indicator">
+        <span class="save-dot" aria-hidden="true"></span><b id="save-state">Ready</b>
+      </span>
     </footer>
 
     <div class="boot-error" id="boot-error" role="alert" hidden></div>

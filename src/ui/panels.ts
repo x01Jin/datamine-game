@@ -24,7 +24,6 @@ import {
   setText,
   shortName,
   sortedBy,
-  tierHex,
   tierVars,
 } from './dom.ts';
 import type { UI } from './ui.ts';
@@ -113,8 +112,8 @@ export function renderBank(ui: UI, force: boolean): void {
     const tierTag = el('span', 'lane-tier', tierLabel(tier));
     const name = el('span', 'lane-name', shortName(info.name));
     const head = el('span', 'lane-head');
-    head.append(name, tierTag);
-    lane.append(head, value);
+    head.append(name);
+    lane.append(head, value, tierTag);
     host.append(lane);
 
     ui.bankAmounts.set(tier, value);
@@ -124,7 +123,7 @@ export function renderBank(ui: UI, force: boolean): void {
   const master = ui.refs.bankTotal;
   master.textContent = '';
   const masterHead = el('span', 'lane-head');
-  masterHead.append(el('span', 'lane-name', 'Total banked'), el('span', 'lane-tier', 'ALL TIME'));
+  masterHead.append(el('span', 'lane-name', 'Total banked'));
   const masterValue = el('span', 'lane-value', fmt(state.stats.totalBanked));
   master.append(masterHead, masterValue);
   ui.bankTotal = masterValue;
@@ -253,7 +252,6 @@ export function renderBuild(ui: UI): void {
 
     setText(entry.amount, fmt(cost.amount));
     setText(entry.unit, dataInfo(cost.tier).name);
-    entry.unit.style.color = tierHex(cost.tier);
   }
 }
 
@@ -321,6 +319,7 @@ export function renderOps(ui: UI): void {
       const card = el('article', 'dispatch-row');
       card.innerHTML = `
         <div class="dispatch-top">
+          <span class="dispatch-dot" aria-hidden="true"></span>
           <span class="dispatch-title"></span>
           <span class="dispatch-reward"></span>
         </div>
@@ -397,7 +396,7 @@ export function updateOps(ui: UI): void {
     const ratio = pct(progress, raw.goal);
     setText(card.title, raw.title);
     setText(card.brief, raw.brief);
-    setText(card.kind, raw.kind.toUpperCase());
+    setText(card.kind, raw.kind.charAt(0).toUpperCase() + raw.kind.slice(1));
     card.fill.style.width = `${ratio}%`;
     card.el.classList.toggle('is-done', progress >= raw.goal);
     tierVars(card.el, raw.tier);
@@ -420,7 +419,7 @@ export function updateOps(ui: UI): void {
     const rank = state.coreRanks[upgrade.id as keyof typeof state.coreRanks] || 0;
     const maxed = rank >= upgrade.max;
     const cost = coreUpgradeCost(upgrade, rank);
-    setText(row.rank, maxed ? 'MAXED' : `RANK ${rank}`);
+    setText(row.rank, maxed ? 'Maxed' : `Rank ${rank}`);
     setText(row.price, maxed ? '' : `→ ${cost} core${cost === 1 ? '' : 's'}`);
     row.button.disabled = maxed || state.cores < cost;
     row.el.classList.toggle('is-maxed', maxed);

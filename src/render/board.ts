@@ -1,5 +1,14 @@
-import { Application, Container, Graphics, Sprite, TilingSprite, Texture, type Ticker } from 'pixi.js';
-import type { Camera, Face, Link, MachineNode, Point, State, View } from '../game/types.ts';
+import {
+  Application,
+  Container,
+  Graphics,
+  Sprite,
+  TilingSprite,
+  Texture,
+  type BitmapText,
+  type Ticker,
+} from 'pixi.js';
+import type { Camera, Link, MachineNode, Point, State, View } from '../game/types.ts';
 import type { Bounds } from '../layout/geometry.ts';
 import {
   GRID,
@@ -11,13 +20,12 @@ import {
   nodeSize,
   outputPort,
   portWorldPos,
-  rotationFaces,
   type WirePath,
 } from '../layout/geometry.ts';
 import { nodeStatus } from '../game/sim.ts';
 import { CONFIG, bufferCap, dataInfo, fmt, recipeFor, tierLabel } from '../game/gamedata.ts';
 import { CHROME, METRICS, STATUS_COLOR, tierBright, tierColor, tierDim } from './theme.ts';
-import { MONO, MONO_LG, MONO_SM, MONO_XL, label, setFontScale } from './labels.ts';
+import { label, setFontScale } from './labels.ts';
 import { backgroundTexture, glowTexture, glyphTexture, latticeTexture, vignetteTexture } from './textures.ts';
 
 interface NodeView {
@@ -25,7 +33,7 @@ interface NodeView {
   frame: Graphics;
   glyph: Sprite;
   title: ReturnType<typeof label>;
-  sub: ReturnType<typeof label>;
+  meta: ReturnType<typeof label>;
   status: ReturnType<typeof label>;
   detail: ReturnType<typeof label>;
   util: ReturnType<typeof label>;
@@ -41,7 +49,7 @@ interface NodeView {
   lastUtil: number;
   lastDetail: string;
   lastLevel: number;
-  compactMode: boolean;
+  lod: number;
 }
 
 const PARTICLE_CAP = 420;
@@ -54,6 +62,16 @@ function mod(value: number, span: number): number {
 
 function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+}
+
+function fitLabel(node: BitmapText, text: string, maxWidth: number): void {
+  node.text = text;
+  if (node.width <= maxWidth || text.length < 2) return;
+  let cut = text.length;
+  while (cut > 1 && node.width > maxWidth) {
+    cut -= 1;
+    node.text = `${text.slice(0, cut).trimEnd()}…`;
+  }
 }
 
 export class Board {
@@ -143,7 +161,9 @@ export class Board {
 
     this.bgGradient = new Sprite(backgroundTexture());
     this.bgVignette = new Sprite(vignetteTexture());
+    this.bgVignette.alpha = 0.55;
     this.bgLattice = new TilingSprite({ texture: latticeTexture(32), width: 10, height: 10 });
+    this.bgLattice.alpha = 0.35;
     this.bgLayer.addChild(this.bgGradient, this.bgLattice, this.bgVignette);
 
     this.gridLayer.addChild(this.gridMinor, this.gridMajor);
@@ -165,8 +185,9 @@ export class Board {
 
     this.app.stage.addChild(this.bgLayer, this.gridLayer, this.worldLayer);
 
-    this.particleTextures = [glowTexture(24), glowTexture(16)];
+    this.particleTextures = [glowTexture(8)];
     this.resize();
+    setFontScale(this.cam.zoom * this.baseResolution);
   }
 
   get ticker(): Ticker {
@@ -383,9 +404,9 @@ export class Board {
       }
     }
     this.wireCasing.stroke({
-      width: METRICS.wireWidth + 2.4,
+      width: METRICS.wireWidth + 2,
       color: 0x04060a,
-      alpha: 0.9,
+      alpha: 0.55,
       cap: 'round',
       join: 'round',
     });
@@ -397,7 +418,7 @@ export class Board {
         const path = this.paths.get(link.id);
         if (!path) continue;
         this.tracePath(g, path);
-        g.stroke({ width: METRICS.wireWidth, color, alpha: 0.75, cap: 'round', join: 'round' });
+        g.stroke({ width: METRICS.wireWidth, color, alpha: 0.9, cap: 'round', join: 'round' });
       }
       this.wireGroups.set(tier, g);
       this.wireLayer.addChild(g);
@@ -434,27 +455,27 @@ export class Board {
     const frame = new Graphics();
     const glyph = new Sprite(glyphTexture(this.glyphShape(node)));
     glyph.anchor.set(0.5);
-    const title = label('', { font: MONO, size: 11 });
-    const sub = label('', { font: MONO_SM, size: 10 });
-    const status = label('', { font: MONO_SM, size: 10 });
-    const detail = label('', { font: MONO_SM, size: 10 });
-    const util = label('', { font: MONO_SM, size: 10, anchorX: 1 });
-    const level = label('', { font: MONO_SM, size: 10, anchorX: 1 });
-    const compact = label('', { font: MONO_XL, size: 17, anchorX: 0.5 });
-    const value = label('', { font: MONO_LG, size: 22, anchorX: 0.5, anchorY: 0.5 });
+    const title = label('', { role: 'title' });
+    const meta = label('', { role: 'meta' });
+    const status = label('', { role: 'status' });
+    const detail = label('', { role: 'meta' });
+    const util = label('', { role: 'meta', anchorX: 1 });
+    const level = label('', { role: 'meta', anchorX: 1 });
+    const compact = label('', { role: 'compact', anchorX: 0.5, anchorY: 0.5 });
+    const value = label('', { role: 'value', anchorX: 0.5, anchorY: 0.5 });
     const bar = new Sprite(Texture.WHITE);
     bar.anchor.set(0, 0.5);
-    const dot = new Sprite(this.particleTextures[1] ?? glowTexture(16));
+    const dot = new Sprite(Texture.WHITE);
     dot.anchor.set(0.5);
 
-    root.addChild(frame, bar, dot, glyph, title, sub, status, detail, util, level, compact, value);
+    root.addChild(frame, bar, dot, glyph, title, meta, status, detail, util, level, compact, value);
 
     const view: NodeView = {
       root,
       frame,
       glyph,
       title,
-      sub,
+      meta,
       status,
       detail,
       util,
@@ -470,7 +491,7 @@ export class Board {
       lastUtil: -1,
       lastDetail: '',
       lastLevel: -1,
-      compactMode: false,
+      lod: this.lodLevel(),
     };
     this.paintNode(view, node);
     return view;
@@ -495,6 +516,11 @@ export class Board {
     };
   }
 
+  private lodLevel(): number {
+    const zoom = this.cam.zoom;
+    return zoom < 0.68 ? 0 : zoom < 0.98 ? 1 : 2;
+  }
+
   private paintNode(view: NodeView, node: MachineNode): void {
     const b = this.localBounds(node);
     const tier = view.tier;
@@ -507,23 +533,18 @@ export class Board {
       return;
     }
 
-    const compact = this.cam.zoom < 0.8;
-    view.compactMode = compact;
+    const compact = view.lod === 0;
 
     g.roundRect(b.left, b.top, b.w, b.h, METRICS.cardRadius).fill({
       color: CHROME.plate,
-      alpha: 0.96,
+      alpha: 1,
     });
     g.roundRect(b.left + 0.5, b.top + 0.5, b.w - 1, b.h - 1, METRICS.cardRadius).stroke({
       width: 1,
       color: CHROME.rule,
-      alpha: 0.9,
+      alpha: 0.8,
     });
-    this.paintEdge(g, b, rotationFaces(node).in, accent);
-    g.moveTo(b.left + 12, b.top + 37)
-      .lineTo(b.right - 12, b.top + 37)
-      .stroke({ width: 1, color: CHROME.ruleSoft, alpha: 1 });
-    g.rect(b.left + 12, b.top + b.h - 14, b.w - 24, 3).fill({
+    g.rect(b.left + 12, b.bottom - 12, b.w - 24, 3).fill({
       color: CHROME.inset,
       alpha: 1,
     });
@@ -531,35 +552,35 @@ export class Board {
 
     view.glyph.texture = glyphTexture(this.glyphShape(node));
     view.glyph.tint = accent;
-    view.glyph.position.set(b.left + 22, b.top + 19);
-    view.glyph.width = 16;
-    view.glyph.height = 16;
+    view.glyph.position.set(b.left + 17, b.top + 17);
+    view.glyph.width = 18;
+    view.glyph.height = 18;
 
-    view.title.text = node.kind === 'extractor' ? 'RAW DATA' : this.tierName(node);
+    fitLabel(view.title, this.tierName(node), b.w - 74);
     view.title.tint = CHROME.ink;
-    view.title.position.set(b.left + 38, b.top + 11);
+    view.title.position.set(b.left + 34, b.top + 7);
 
-    view.sub.text = node.kind === 'extractor' ? 'EXTRACTOR' : `FORGE ${this.tierTag(node)}`;
-    view.sub.tint = CHROME.inkDim;
-    view.sub.position.set(b.left + 38, b.top + 24);
+    view.meta.text = node.kind === 'extractor' ? 'EXTRACTOR' : `FORGE · ${this.tierTag(node)}`;
+    view.meta.tint = CHROME.inkDim;
+    view.meta.position.set(b.left + 34, b.top + 27);
 
     view.compact.text = node.kind === 'extractor' ? 'RAW' : this.tierTag(node);
     view.compact.tint = accent;
-    view.compact.position.set(0, b.top + 38);
+    view.compact.position.set(0, 0);
 
-    view.status.position.set(b.left + 26, b.top + 44);
-    view.detail.position.set(b.left + 12, b.top + 60);
-    view.util.position.set(b.right - 12, b.top + 44);
+    view.status.position.set(b.left + 24, b.top + 46);
+    view.detail.position.set(b.left + 12, b.top + 65);
+    view.util.position.set(b.right - 12, b.top + 45);
     view.level.text = `L${node.level}`;
-    view.level.tint = tierColor(tier);
-    view.level.position.set(b.right - 12, b.top + 11);
-    view.level.visible = node.kind === 'processor';
+    view.level.tint = accent;
+    view.level.position.set(b.right - 12, b.top + 9);
 
-    view.status.visible = !compact;
-    view.detail.visible = !compact;
-    view.util.visible = !compact;
     view.title.visible = !compact;
-    view.sub.visible = !compact;
+    view.meta.visible = !compact;
+    view.status.visible = !compact;
+    view.detail.visible = view.lod === 2;
+    view.util.visible = !compact;
+    view.level.visible = !compact;
     view.glyph.visible = !compact;
     view.compact.visible = compact;
     view.bar.visible = !compact;
@@ -567,25 +588,9 @@ export class Board {
     view.value.visible = false;
   }
 
-  private paintEdge(g: Graphics, b: Bounds, face: Face, color: number): void {
-    if (face === 'e') {
-      g.rect(b.right - 3.5, b.top + 1, 2.5, b.h - 2).fill({ color, alpha: 0.85 });
-      return;
-    }
-    if (face === 'n') {
-      g.rect(b.left + 1, b.top + 1, b.w - 2, 2.5).fill({ color, alpha: 0.85 });
-      return;
-    }
-    if (face === 's') {
-      g.rect(b.left + 1, b.bottom - 3.5, b.w - 2, 2.5).fill({ color, alpha: 0.85 });
-      return;
-    }
-    g.rect(b.left + 1, b.top + 1, 2.5, b.h - 2).fill({ color, alpha: 0.85 });
-  }
-
   private tierName(node: MachineNode): string {
     const tier = node.kind === 'processor' ? node.tier : 0;
-    return dataInfo(tier).name.toUpperCase();
+    return dataInfo(tier).name;
   }
 
   private tierTag(node: MachineNode): string {
@@ -615,46 +620,53 @@ export class Board {
     const g = view.frame;
     g.roundRect(b.left, b.top, b.w, b.h, METRICS.cardRadius).fill({
       color: CHROME.plate,
-      alpha: 0.96,
+      alpha: 1,
     });
     g.roundRect(b.left + 0.5, b.top + 0.5, b.w - 1, b.h - 1, METRICS.cardRadius).stroke({
       width: 1,
       color: CHROME.rule,
-      alpha: 0.95,
+      alpha: 0.8,
     });
-    g.circle(cx, cy, 52).stroke({ width: 1, color: CHROME.ruleSoft, alpha: 1 });
-    g.circle(cx, cy, 38).stroke({ width: 1, color: CHROME.ruleSoft, alpha: 0.8 });
+    g.circle(cx, cy, 52).stroke({ width: 1, color: CHROME.rule, alpha: 0.9 });
+    g.circle(cx, cy, 38).stroke({ width: 1, color: CHROME.rule, alpha: 0.65 });
     for (let i = 0; i < 24; i++) {
       const angle = (Math.PI * 2 * i) / 24;
       const inner = i % 6 === 0 ? 58 : 62;
       g.moveTo(cx + Math.cos(angle) * inner, cy + Math.sin(angle) * inner)
         .lineTo(cx + Math.cos(angle) * 66, cy + Math.sin(angle) * 66)
-        .stroke({ width: 1, color: CHROME.rule, alpha: i % 6 === 0 ? 0.9 : 0.45 });
+        .stroke({ width: 1, color: CHROME.rule, alpha: i % 6 === 0 ? 0.85 : 0.4 });
     }
-    g.moveTo(b.left + 18, b.top + 22)
-      .lineTo(b.right - 18, b.top + 22)
-      .stroke({ width: 1, color: CHROME.ruleSoft, alpha: 1 });
+    g.moveTo(b.left + 18, b.top + 34)
+      .lineTo(b.right - 18, b.top + 34)
+      .stroke({ width: 1, color: CHROME.ruleSoft, alpha: 0.8 });
     this.paintPorts(g, node);
 
     view.title.text = 'VAULT';
     view.title.tint = CHROME.inkDim;
     view.title.position.set(cx, b.top + 14);
     view.title.anchor.set(0.5, 0);
+    view.title.visible = true;
+
     view.value.text = '';
     view.value.tint = CHROME.ink;
     view.value.position.set(cx, cy - 2);
     view.value.visible = true;
-    view.detail.text = 'UNITS HELD';
-    view.detail.tint = CHROME.inkFaint;
-    view.detail.position.set(cx, cy + 20);
-    view.detail.anchor.set(0.5, 0);
-    view.status.text = '';
+
+    view.status.text = 'units held';
+    view.status.tint = CHROME.inkFaint;
+    view.status.position.set(cx, cy + 22);
+    view.status.anchor.set(0.5, 0);
+    view.status.visible = true;
+
+    view.meta.text = '';
     view.util.text = '';
     view.compact.text = '';
+    view.detail.text = '';
+    view.meta.visible = false;
+    view.detail.visible = false;
+    view.util.visible = false;
     view.level.visible = false;
     view.glyph.visible = false;
-    view.title.visible = true;
-    view.sub.visible = false;
     view.compact.visible = false;
     view.bar.visible = false;
     view.dot.visible = false;
@@ -689,9 +701,9 @@ export class Board {
         view.lastLevel = -1;
         this.paintNode(view, node);
       }
-      const compact = zoom < 0.8;
-      if (compact !== view.compactMode) {
-        view.compactMode = compact;
+      const lod = this.lodLevel();
+      if (lod !== view.lod) {
+        view.lod = lod;
         this.paintNode(view, node);
       }
       this.updateNodeDynamic(view, node);
@@ -724,16 +736,14 @@ export class Board {
     const status = nodeStatus(this.state, node);
     if (status !== view.lastStatus) {
       view.lastStatus = status;
-      view.status.text = status.toUpperCase();
+      view.status.text = status.charAt(0).toUpperCase() + status.slice(1);
       view.status.tint = STATUS_COLOR[status] ?? CHROME.inkFaint;
       view.dot.tint = STATUS_COLOR[status] ?? CHROME.inkFaint;
     }
-    view.dot.position.set(
-      view.compactMode ? b.left + 15 : b.left + 17,
-      view.compactMode ? b.top + 15 : b.top + 47,
-    );
-    view.dot.width = 9;
-    view.dot.height = 9;
+    view.dot.position.set(b.left + 15, view.lod === 0 ? b.top + 15 : b.top + 53);
+    const dotSize = view.lod === 0 ? 7 : 5;
+    view.dot.width = dotSize;
+    view.dot.height = dotSize;
 
     const util = Math.max(0, Math.min(1, node._util ?? 0));
     const percent = Math.round(util * 100);
@@ -744,7 +754,7 @@ export class Board {
       const cap = this.bufferCapFor(node);
       const ratio = Math.max(0, Math.min(1, (node.out?.amount ?? 0) / (cap || 1)));
       const barLeft = b.left + 12;
-      const barTop = b.top + b.h - 14;
+      const barTop = b.bottom - 12;
       const barW = b.w - 24;
       view.bar.position.set(barLeft, barTop + 1.5);
       view.bar.height = 3;
@@ -815,6 +825,8 @@ export class Board {
     if (!sprite) {
       sprite = new Sprite(this.particleTextures[index % this.particleTextures.length]);
       sprite.anchor.set(0.5);
+      sprite.width = 6;
+      sprite.height = 6;
       sprite.visible = false;
       this.particlePool[index] = sprite;
       this.particleLayer.addChild(sprite);

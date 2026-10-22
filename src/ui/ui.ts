@@ -50,8 +50,8 @@ export interface UiRefs {
   nodeCount: HTMLElement;
   linkCount: HTMLElement;
   tierReadout: HTMLElement;
-  statusMid: HTMLElement;
   saveState: HTMLElement;
+  saveIndicator: HTMLElement;
   btnPause: HTMLButtonElement;
   btnSound: HTMLButtonElement;
   btnSettings: HTMLButtonElement;
@@ -118,8 +118,8 @@ function cacheRefs(): UiRefs {
     nodeCount: byId('node-count'),
     linkCount: byId('link-count'),
     tierReadout: byId('tier-readout'),
-    statusMid: byId('status-mid'),
     saveState: byId('save-state'),
+    saveIndicator: byId('save-indicator'),
     btnPause: byId<HTMLButtonElement>('btn-pause'),
     btnSound: byId<HTMLButtonElement>('btn-sound'),
     btnSettings: byId<HTMLButtonElement>('btn-settings'),
@@ -455,11 +455,6 @@ export class UI implements UIApi {
 
     if (now - this.lastStatus > 500) {
       this.lastStatus = now;
-      setText(
-        this.refs.statusMid,
-        `DEEPEST ${tierLabel(state.stats.deepestTier)}  ·  MACHINES ${state.nodes.length}  ·  LINKS ${state.links.length}` +
-          (state.cores > 0 ? `  ·  CORES ${state.cores}` : ''),
-      );
       updateHint(this);
     }
   }
@@ -569,7 +564,7 @@ export class UI implements UIApi {
         if (live.statusRow) {
           const receiving = incoming > 0.002;
           live.statusRow.className = `status-row is-${receiving ? 'receiving' : 'idle'}`;
-          setText(live.statusText, receiving ? 'RECEIVING' : 'IDLE');
+          setText(live.statusText, receiving ? 'Receiving' : 'Idle');
           const util = live.statusRow.querySelector('.status-util');
           if (util) util.textContent = `${wires} wire${wires === 1 ? '' : 's'}`;
         }
@@ -638,7 +633,8 @@ export class UI implements UIApi {
     if (label === this.lastSave && !ok) return;
     this.lastSave = label;
     setText(this.refs.saveState, label);
-    this.refs.saveState.classList.toggle('is-saved', ok);
+    this.refs.saveIndicator.classList.toggle('is-saved', ok);
+    this.refs.saveIndicator.classList.toggle('is-warn', label === 'Conflict' || label === 'Save failed');
   }
 
   applySettings(): void {
@@ -767,6 +763,7 @@ export class UI implements UIApi {
         const info = dataInfo(Number(tier));
         const row = el('div', 'gain-row');
         row.style.setProperty('--tier', tierHex(Number(tier)));
+        row.append(el('i', 'gain-dot'));
         row.append(el('span', 'gain-name', info.name));
         row.append(el('b', 'gain-amount', `+${fmt(amount)}`));
         list.append(row);

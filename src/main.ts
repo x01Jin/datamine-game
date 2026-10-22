@@ -6,7 +6,7 @@ import { createInitialState, importGame, loadGame, makeProcessor, serialize } fr
 import { simulate, step } from './game/sim.ts';
 import { Interaction } from './input/interaction.ts';
 import { Board } from './render/board.ts';
-import { installFonts, waitForFonts } from './render/labels.ts';
+import { waitForFonts } from './render/labels.ts';
 import { applyCssVars } from './render/theme.ts';
 import { UI } from './ui/ui.ts';
 
@@ -16,7 +16,6 @@ const SYNC_INTERVAL = 120;
 async function boot(): Promise<void> {
   applyCssVars();
   await waitForFonts();
-  installFonts();
 
   const canvas = document.getElementById('board') as HTMLCanvasElement | null;
   if (!canvas) throw new Error('board canvas missing');
@@ -54,7 +53,7 @@ async function boot(): Promise<void> {
 
   app.seedAutosave(loaded.fresh ? 0 : loadedSavedAt);
   app.installAutosave();
-  ui.setSaveState(loaded.fresh ? 'READY' : 'SAVED', !loaded.fresh);
+  ui.setSaveState(loaded.fresh ? 'Ready' : 'Saved', !loaded.fresh);
   ui.applySettings();
 
   if (loaded.fresh) board.fit();

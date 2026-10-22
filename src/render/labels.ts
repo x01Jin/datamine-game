@@ -1,43 +1,76 @@
 import { BitmapFont, BitmapText } from 'pixi.js';
+import type { TextStyleFontWeight } from 'pixi.js';
 import { FONT_MONO, FONT_SANS } from './theme.ts';
 
-export const MONO = 'datamine-mono';
-export const MONO_SM = 'datamine-mono-sm';
-export const MONO_LG = 'datamine-mono-lg';
-export const MONO_XL = 'datamine-mono-xl';
+export type LabelRole = 'title' | 'meta' | 'status' | 'value' | 'compact';
 
-const CHARS: (string | string[])[] = [[' ', '~'], '×', '→', '←', '↑', '↓', '·', '×', '°', '±', '✓'];
-
-const BUCKETS = [0.4, 0.5, 0.75, 1, 1.5, 2, 3, 4] as const;
-
-interface FontSpec {
-  base: string;
+interface RoleSpec {
+  family: string;
   size: number;
+  weight: TextStyleFontWeight;
+  chars: string;
 }
 
-const SPECS: FontSpec[] = [
-  { base: MONO, size: 11 },
-  { base: MONO_SM, size: 10 },
-  { base: MONO_LG, size: 13 },
-  { base: MONO_XL, size: 17 },
-];
+const UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const LOWER = 'abcdefghijklmnopqrstuvwxyz';
+const DIGITS = '0123456789';
+
+const ROLES: Record<LabelRole, RoleSpec> = {
+  title: {
+    family: FONT_SANS,
+    size: 14,
+    weight: '500',
+    chars: `${UPPER}${LOWER}${DIGITS} .'-/+…`,
+  },
+  meta: {
+    family: FONT_MONO,
+    size: 11,
+    weight: '400',
+    chars: `${UPPER}${DIGITS}% ×+→·-/`,
+  },
+  status: {
+    family: FONT_SANS,
+    size: 11,
+    weight: '400',
+    chars: `${UPPER}${LOWER} `,
+  },
+  value: {
+    family: FONT_MONO,
+    size: 28,
+    weight: '500',
+    chars: `${UPPER}${LOWER}${DIGITS}.,+-`,
+  },
+  compact: {
+    family: FONT_MONO,
+    size: 20,
+    weight: '500',
+    chars: `T${DIGITS}RAWN`,
+  },
+};
+
+const BUCKETS = [0.5, 0.625, 0.75, 0.875, 1, 1.125, 1.25, 1.375, 1.5, 1.75, 2, 2.5, 3, 3.5, 4] as const;
 
 const installed = new Set<number>();
-const live = new Set<BitmapText>();
-let bucket: number = 1;
+const live = new Map<BitmapText, LabelRole>();
+let bucket = 1;
 
-function fontName(base: string, resolution: number): string {
-  return `${base}@${resolution}`;
+function fontName(role: LabelRole, resolution: number): string {
+  return `${role}@${resolution}`;
 }
 
 function installBucket(resolution: number): void {
   if (installed.has(resolution)) return;
   installed.add(resolution);
-  for (const spec of SPECS) {
+  for (const [role, spec] of Object.entries(ROLES) as [LabelRole, RoleSpec][]) {
     BitmapFont.install({
-      name: fontName(spec.base, resolution),
-      style: { fontFamily: FONT_MONO, fontSize: spec.size, fill: 0xffffff },
-      chars: CHARS,
+      name: fontName(role, resolution),
+      style: {
+        fontFamily: spec.family,
+        fontSize: spec.size,
+        fontWeight: spec.weight,
+        fill: 0xffffff,
+      },
+      chars: Array.from(spec.chars),
       resolution,
       padding: 2,
       skipKerning: true,
@@ -45,25 +78,12 @@ function installBucket(resolution: number): void {
   }
 }
 
-// The atlas must be rasterised at the size the glyphs land on screen, otherwise the
-// sampler minifies a high-resolution atlas into a small box and the type turns to mush.
 function pickBucket(scale: number): number {
   const target = Math.max(BUCKETS[0], Math.min(BUCKETS[BUCKETS.length - 1], scale));
-  let best: number = BUCKETS[0];
-  let error = Infinity;
   for (const option of BUCKETS) {
-    const delta = Math.abs(option - target);
-    if (delta < error) {
-      best = option;
-      error = delta;
-    }
+    if (option >= target) return option;
   }
-  return best;
-}
-
-export function installFonts(): void {
-  bucket = pickBucket(typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
-  installBucket(bucket);
+  return BUCKETS[BUCKETS.length - 1];
 }
 
 export function setFontScale(scale: number): void {
@@ -71,53 +91,48 @@ export function setFontScale(scale: number): void {
   if (next === bucket) return;
   bucket = next;
   installBucket(next);
-  for (const node of live) {
+  for (const [node, role] of live) {
     if (node.destroyed) {
       live.delete(node);
       continue;
     }
-    const current = node.style.fontFamily;
-    const mark = current.lastIndexOf('@');
-    if (mark < 0) continue;
-    node.style.fontFamily = `${current.slice(0, mark)}@${next}`;
+    node.style.fontFamily = fontName(role, next);
   }
 }
 
 export async function waitForFonts(): Promise<void> {
   if (!('fonts' in document)) return;
   await Promise.all([
-    document.fonts.load(`11px "${FONT_MONO}"`),
-    document.fonts.load(`11px "${FONT_SANS}"`),
+    document.fonts.load(`400 11px "${FONT_MONO}"`),
+    document.fonts.load(`500 28px "${FONT_MONO}"`),
+    document.fonts.load(`500 14px "${FONT_SANS}"`),
   ]).catch(() => undefined);
   await document.fonts.ready.catch(() => undefined);
 }
 
 export interface LabelOptions {
-  font?: string;
-  size?: number;
+  role: LabelRole;
   color?: number;
   anchorX?: number;
   anchorY?: number;
   alpha?: number;
-  letterSpacing?: number;
 }
 
-export function label(text: string, options: LabelOptions = {}): BitmapText {
-  const base = options.font ?? MONO;
-  const size = options.size ?? 11;
+export function label(text: string, options: LabelOptions): BitmapText {
+  const spec = ROLES[options.role];
+  if (!installed.has(bucket)) installBucket(bucket);
   const node = new BitmapText({
     text,
     style: {
-      fontFamily: fontName(base, bucket),
-      fontSize: size,
+      fontFamily: fontName(options.role, bucket),
+      fontSize: spec.size,
       fill: options.color ?? 0xffffff,
-      letterSpacing: options.letterSpacing ?? 0,
     },
   });
   node.anchor.set(options.anchorX ?? 0, options.anchorY ?? 0);
   if (options.alpha !== undefined) node.alpha = options.alpha;
   node.roundPixels = true;
-  live.add(node);
+  live.set(node, options.role);
   node.once('destroyed', () => live.delete(node));
   return node;
 }

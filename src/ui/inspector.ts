@@ -481,7 +481,7 @@ function wiringHtml(state: State, node: MachineNode): string {
 
 function wireRow(row: WireEnd): string {
   return `<div class="wire-row">
-    <span class="wire-dir">${row.dir === 'in' ? 'IN' : 'OUT'}</span>
+    <span class="wire-dir">${row.dir === 'in' ? 'In' : 'Out'}</span>
     <i class="wire-dot" style="background:${tierHex(row.tier)}"></i>
     <span class="wire-name">${escapeHtml(row.name)}</span>
   </div>`;
