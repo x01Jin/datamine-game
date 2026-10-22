@@ -1,0 +1,73 @@
+# DATAMINE
+
+A browser-only signal refinery. Extract raw noise, wire it through forges, and bank the result. The network does not end.
+
+## Run it
+
+```bash
+npm start
+```
+
+Open http://localhost:5173. No install step, no build step, no external assets. Saves live in `localStorage` and are written while you play.
+
+## Play
+
+- Click a machine in the Build panel, then click the board to place it. Shift-click keeps the tool armed.
+- Drag from a machine's output port to a compatible input port to make a wire. A wrong port is rejected with a reason.
+- Drag empty space to pan, scroll to zoom. Middle-drag or hold Space also pans.
+- Click a machine or wire to open its inspector. Upgrades are paid from the bank.
+- Dismantling refunds the full build and upgrade cost. The vault and your final extractor are permanent anchors.
+- Bank one unit of a signal to reveal the next tier. Every forge consumes the two signals below it, so older tiers keep working.
+
+The first connection is the one that matters: get the extractor's output into the vault.
+
+## The floor
+
+Machines snap to a lattice, so the refinery lines up like a plant floor. Hold `G` (or turn off "Snap to grid" in Settings) to place them freely.
+
+Wires can be routed. Double-click a wire to drop an anchor, drag the handle to bend the route, right-click to remove it. A routed wire draws as a hard path through its anchors instead of a curve.
+
+When one output feeds several inputs, every wire takes a share of the flow. Set a wire to High or Low priority in its inspector to decide who gets served first. A wire to the vault starts on Low, so your chain keeps priority and the bank takes the spill; raise it when you need to bank harder.
+
+## The Ops board
+
+The Ops tab holds two things.
+
+**Directives** are standing orders, three at a time: bank a quantity of a signal, hold a forge above 95% load for a while, run more machines, reach a deeper tier. Each one pays out in banked signals, and the harder ones pay cores. They complete on their own and issue a replacement.
+
+**Cores** are the meta currency. They buy permanent ranks in the core exchange: more speed, bigger buffers, richer directives, longer offline catch-up.
+
+**Deep scan** tears the refinery down and rebuilds it from bare rock, in exchange for cores. Cores, ranks and archive records survive. It unlocks once the archive reaches tier 06.
+
+## Controls
+
+| Key | Action |
+| --- | --- |
+| `P` | Pause / resume |
+| `M` | Mute / unmute |
+| `H` | Fit the network |
+| `B` / `C` | Build / Codex |
+| `G` | Toggle grid snap |
+| `+` / `-` | Zoom |
+| `Esc` | Cancel placement, wire, or selection |
+| `Delete` | Dismantle the selected machine, cut the selected wire, or remove the selected anchor |
+
+Touch: drag to pan, pinch to zoom, tap to select.
+
+## Saves
+
+- Desktop: Settings (gear) → Export / Import.
+- The game saves automatically, and catches up while the tab was hidden for up to eight hours (longer with Deep Survey).
+- If another tab writes a newer save, autosave pauses with a `CONFLICT` marker instead of overwriting it.
+- Settings → Restore guidance hints brings the hint bar back after it has been dismissed.
+- To start over without touching the file system, use Settings → Wipe instance.
+
+## Development
+
+```bash
+npm test
+```
+
+Tests cover the data ladder, save normalization, the simulation step, placement / wiring / refund behavior, wire routing and priority, and the Ops board. The source is plain ES modules under `src/`; `serve.js` is a small static server used only for local development.
+
+`docs/GDD.md` explains the design: the loop, the progression, and why each system exists.

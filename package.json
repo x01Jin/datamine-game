@@ -1,0 +1,11 @@
+{
+  "name": "datamine",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "An idle data-refinery game played on an infinite wiring board.",
+  "scripts": {
+    "start": "node serve.js",
+    "test": "node --test"
+  }
+}
