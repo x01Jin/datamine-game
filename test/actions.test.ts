@@ -78,13 +78,14 @@ const FORGE_B = { x: 0, y: 690 };
 
 test('placing machines spends currency and records the investment', () => {
   const state = createInitialState();
-  state.bank[0] = 100;
+  state.bank[0] = 100_010;
   const app = appFor(state);
-  const extractorCost = currentCost(state, 'extractor').amount;
+  assert.deepEqual(currentCost(state, 'extractor'), [{ tier: 0, amount: CONFIG.machineTierCost }]);
   const extractor = placeExtractor(app, 0, 300);
   assert.ok(extractor);
   assert.equal(extractorCount(state), 2);
-  assert.equal(state.bank[0], 100 - extractorCost);
+  assert.equal(state.bank[0], 10);
+  assert.equal(extractor.invested[0], CONFIG.machineTierCost);
   const forge = placeProcessor(app, 1, FORGE_A.x, FORGE_A.y);
   assert.ok(forge);
   assert.equal(forge.invested[0], 10);
@@ -95,7 +96,7 @@ test('placement rejects overlap and unaffordable machines', () => {
   state.bank[0] = 5;
   const app = appFor(state);
   assert.equal(placeProcessor(app, 1, FORGE_A.x, FORGE_A.y), null);
-  state.bank[0] = 100;
+  state.bank[0] = 100_000;
   assert.equal(placeExtractor(app, -190, 0), null);
 });
 
@@ -166,7 +167,7 @@ test('the vault and final extractor are protected', () => {
   assert.equal(state.nodes.length, 2);
 });
 
-test('affordability is checked against the cost tier only', () => {
+test('affordability compares each line against its own bank', () => {
   const state = createInitialState();
   state.bank[0] = 10;
   state.bank[1] = 0;
@@ -176,6 +177,51 @@ test('affordability is checked against the cost tier only', () => {
   state.nodes.push(forge);
   state.bank[1] = 5;
   assert.equal(canAfford(state, { tier: 1, amount: 6 }), false);
+});
+
+test('a multi-line price needs every line and spends nothing when short', () => {
+  const state = createInitialState();
+  state.bank[0] = 200_000;
+  const app = appFor(state);
+  const second = placeExtractor(app, 0, 300);
+  assert.ok(second);
+  assert.deepEqual(currentCost(state, 'extractor'), [
+    { tier: 0, amount: 100_000 },
+    { tier: 1, amount: 100_000 },
+  ]);
+  state.bank[0] = 100_000;
+  state.bank[1] = 99_999;
+  assert.equal(canAfford(state, currentCost(state, 'extractor')), false);
+  assert.equal(placeExtractor(app, 0, 700), null);
+  assert.equal(state.bank[0], 100_000);
+  assert.equal(state.bank[1], 99_999);
+  state.bank[1] = 100_000;
+  const third = placeExtractor(app, 0, 700);
+  assert.ok(third);
+  assert.equal(state.bank[0], 0);
+  assert.equal(state.bank[1], 0);
+  assert.equal(third.invested[0], 100_000);
+  assert.equal(third.invested[1], 100_000);
+});
+
+test('same-tier lines aggregate before checking affordability', () => {
+  const state = createInitialState();
+  state.bank[0] = 150;
+  assert.equal(
+    canAfford(state, [
+      { tier: 0, amount: 100 },
+      { tier: 0, amount: 100 },
+    ]),
+    false,
+  );
+  state.bank[0] = 200;
+  assert.equal(
+    canAfford(state, [
+      { tier: 0, amount: 100 },
+      { tier: 0, amount: 100 },
+    ]),
+    true,
+  );
 });
 
 test('upgrading stops at the maximum level and spends nothing', () => {

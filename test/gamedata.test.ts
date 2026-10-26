@@ -7,6 +7,7 @@ import {
   extractorCost,
   processorCost,
   upgradeCost,
+  costText,
   levelSpeed,
   globalSpeed,
   fmt,
@@ -59,17 +60,35 @@ test('recipes braid the two previous tiers', () => {
   assert.equal(recipeFor(8)!.output.amount, 1);
 });
 
-test('costs increase with ownership and tier', () => {
-  assert.equal(extractorCost(0).amount, CONFIG.extractorBaseCost);
-  assert.ok(extractorCost(1).amount > extractorCost(0).amount);
-  assert.equal(processorCost(1, 0).tier, 0);
-  assert.equal(processorCost(1, 0).amount, 10);
-  assert.equal(processorCost(2, 0).amount, 17);
-  assert.equal(processorCost(1, 0).amount, 10);
-  assert.ok(processorCost(1, 1).amount > processorCost(1, 0).amount);
-  assert.ok(processorCost(4, 0).amount > processorCost(3, 0).amount);
+test('costs are whole prices and climb with ownership and tier', () => {
+  assert.deepEqual(extractorCost(0), [{ tier: 0, amount: CONFIG.machineTierCost }]);
+  assert.deepEqual(extractorCost(1), [{ tier: 0, amount: 100_000 }]);
+  assert.deepEqual(extractorCost(2), [
+    { tier: 0, amount: 100_000 },
+    { tier: 1, amount: 100_000 },
+  ]);
+  assert.deepEqual(processorCost(1, 0), [{ tier: 0, amount: 10 }]);
+  assert.deepEqual(processorCost(2, 0), [{ tier: 1, amount: 17 }]);
+  assert.deepEqual(processorCost(1, 1), [{ tier: 0, amount: 1000 }]);
+  assert.deepEqual(processorCost(1, 2), [{ tier: 1, amount: 1550 }]);
+  assert.deepEqual(processorCost(1, 3), [{ tier: 2, amount: 2403 }]);
+  assert.deepEqual(processorCost(1, 4), [{ tier: 3, amount: 3724 }]);
+  assert.deepEqual(processorCost(2, 1), [{ tier: 1, amount: 1700 }]);
+  assert.deepEqual(processorCost(2, 2), [{ tier: 2, amount: 2635 }]);
   assert.deepEqual(upgradeCost({ kind: 'extractor', level: 1 }), { tier: 0, amount: 6 });
   assert.deepEqual(upgradeCost({ kind: 'processor', tier: 3, level: 2 }), { tier: 3, amount: 12 });
+});
+
+test('cost text lists every line in tier order', () => {
+  assert.equal(costText({ tier: 0, amount: 6 }), '6 Raw Data');
+  assert.equal(
+    costText([
+      { tier: 2, amount: 100_000 },
+      { tier: 0, amount: 2403 },
+      { tier: 1, amount: 100_000 },
+    ]),
+    '2.4k Raw Data + 100k Clean Bits + 100k Signals',
+  );
 });
 
 test('speed curves are monotonic', () => {

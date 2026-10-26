@@ -1,14 +1,24 @@
 import { hex, tierBright, tierColor, tierDim, tierFaint, tierSoft } from './palette.ts';
-import type { CoreUpgrade, Cost, MachineNode, NodeKind, Priority, Recipe, State, TierInfo } from './types.ts';
+import type {
+  CoreUpgrade,
+  Cost,
+  MachineNode,
+  NodeKind,
+  Price,
+  Priority,
+  Recipe,
+  State,
+  TierInfo,
+} from './types.ts';
 
 export const CONFIG = Object.freeze({
   extractorRate: 2,
-  extractorBaseCost: 8,
-  extractorCostGrowth: 1.45,
+  machineTierCost: 100_000,
   processorCycle: 2,
   processorBaseCost: 10,
   processorTierGrowth: 1.62,
   processorCopyGrowth: 1.55,
+  processorCopyJump: 100,
   upgradeBase: 6,
   upgradeGrowth: 2,
   speedGrowth: 1.5,
@@ -188,23 +198,21 @@ export function recipeFor(tier: number): Recipe | null {
   return recipe;
 }
 
-export function extractorCost(owned: number): Cost {
-  return {
-    tier: 0,
-    amount: Math.ceil(CONFIG.extractorBaseCost * Math.pow(CONFIG.extractorCostGrowth, owned)),
-  };
+export function extractorCost(owned: number): Price {
+  const lines = Math.max(1, owned);
+  const price: Price = [];
+  for (let tier = 0; tier < lines; tier++) price.push({ tier, amount: CONFIG.machineTierCost });
+  return price;
 }
 
-export function processorCost(tier: number | null, owned: number): Cost {
+export function processorCost(tier: number | null, owned: number): Price {
   const target = tier ?? 0;
-  return {
-    tier: Math.max(0, target - 1),
-    amount: Math.ceil(
-      CONFIG.processorBaseCost *
-        Math.pow(CONFIG.processorTierGrowth, target - 1) *
-        Math.pow(CONFIG.processorCopyGrowth, owned),
-    ),
-  };
+  const baseTier = Math.max(0, target - 1);
+  const unit = Math.ceil(CONFIG.processorBaseCost * Math.pow(CONFIG.processorTierGrowth, target - 1));
+  if (owned <= 0) return [{ tier: baseTier, amount: unit }];
+  if (owned === 1) return [{ tier: baseTier, amount: unit * CONFIG.processorCopyJump }];
+  const amount = Math.ceil(unit * CONFIG.processorCopyJump * Math.pow(CONFIG.processorCopyGrowth, owned - 1));
+  return [{ tier: baseTier + owned - 1, amount }];
 }
 
 export interface UpgradeTarget {
@@ -352,8 +360,10 @@ export function tierLabel(tier: number): string {
   return `T${String(tier).padStart(2, '0')}`;
 }
 
-export function costText(cost: Cost): string {
-  return `${fmt(cost.amount)} ${dataInfo(cost.tier).name}`;
+export function costText(cost: Cost | Price): string {
+  const lines = (Array.isArray(cost) ? cost : [cost]).slice();
+  lines.sort((a, b) => a.tier - b.tier);
+  return lines.map((line) => `${fmt(line.amount)} ${dataInfo(line.tier).name}`).join(' + ');
 }
 
 export function normalizePriority(value: unknown, fallback: Priority = 1): Priority {

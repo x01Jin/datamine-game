@@ -23,7 +23,7 @@ DATAMINE has one system per horizon. The first hour of play has to work on all t
 ```
 observe the network  →  find the starved or blocked machine
         ↓
-rebuild the layout: a new forge, a rerouted wire, a priority change
+rebuild the layout: a new processor, a rerouted wire, a priority change
         ↓
 watch the throughput climb and the bank fill
         ↓
@@ -50,7 +50,7 @@ Neither of these change the economy. They change how the player _sees_ the econo
 Without objectives the player asks "what now?" and the answer is "wait for the number". Directives answer it. Three at a time, always in view, always about the current state of the board:
 
 - bank a quantity of a specific signal
-- hold a forge above 95% load for a while
+- hold a processor above 95% load for a while
 - run more machines than you are running
 - reach a deeper tier
 - bank signal types you have never banked
@@ -73,22 +73,24 @@ Names and shapes are procedural past the curated ten, so the archive keeps produ
 
 ## Economy notes
 
-- **Money is per tier.** A tier-3 forge is paid in tier-2 signal. There is no pooled currency, so the bank is a portfolio and the player is always looking at several balances at once.
-- **The vault competes.** A machine with two outputs splits proportionally. The vault is one of the consumers, not a guaranteed sink, and its wire starts on Low priority so a chain keeps the flow by default. A player who wants a forge fed must say so with wire priority.
+- **Money is per tier.** A tier-3 processor is paid in tier-2 signal. There is no pooled currency, so the bank is a portfolio and the player is always looking at several balances at once. A price can also run across several tiers at once, which turns widening into a portfolio decision rather than a check on one number.
+- **The vault competes.** A machine with two outputs splits proportionally. The vault is one of the consumers, not a guaranteed sink, and its wire starts on Low priority so a chain keeps the flow by default. A player who wants a processor fed must say so with wire priority.
 - **Bottlenecks are honest.** Buffers fill, machines block, inputs starve. The first thing a player learns is to read the status dot before buying anything.
 - **Offline is capped.** Eight hours by default. Absent time should be worth something but never worth more than showing up.
 
 ## Pacing
 
-The cost curves are tuned against a reference network (one chain forge per tier, one extractor each, everything banking) and measured from a headless run of the real simulation:
+The cost curves are tuned against a reference network (one chain processor per tier, one extractor each, everything banking) and measured from a headless run of the real simulation:
 
 | Tier            | T01 | T02 | T03 | T04 | T05 | T06 | T07 | T08 |
 | --------------- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Seconds to bank | 3   | 4   | 6   | 12  | 23  | 46  | 87  | 156 |
 
-Each tier costs roughly 1.8x the previous one, which is the classic incremental curve: the wait grows, the machine count grows with it, and a deep scan is the answer to a wait that gets too long.
+The base price of a processor climbs 1.62 times per tier, and each one is paid in the tier below it, so the wait for a reveal grows with depth. The machine count grows with it, and a deep scan is the answer to a wait that gets too long.
 
-Two growth rates do the work. `processorTierGrowth` (1.62) sets how much rarer each tier is, and `globalGrowth` (1.22) hands back a speed multiplier every time the archive goes one tier deeper, so the whole network accelerates as the player climbs. `processorCopyGrowth` (1.55) and `extractorCostGrowth` (1.45) decide whether the player widens the network or overclocks what they already have.
+Two growth rates do the work. `processorTierGrowth` (1.62) sets how much rarer each tier is, and `globalGrowth` (1.22) hands back a speed multiplier every time the archive goes one tier deeper, so the whole network accelerates as the player climbs.
+
+Width has its own clock. The extractor curve counts machines, so each new miner adds a 100,000 line, one tier higher than the last. The second copy costs 100 times the first, then every later copy grows 1.55 times and is paid one tier higher. Both curves, with their tables and the frontier rule, are in [economy.md](economy.md). The design consequence is simple: early on, overclocking is cheaper than widening, and the fourth copy of the deepest tier has to wait for the next reveal.
 
 ## What is deliberately not here
 

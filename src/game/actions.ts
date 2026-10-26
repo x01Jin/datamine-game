@@ -32,6 +32,7 @@ import type {
   Link,
   NodeKind,
   Point,
+  Price,
   Priority,
   ProcessorNode,
   Rot,
@@ -48,17 +49,32 @@ function lookup(map: { [tier: number]: number }, key: number): number | undefine
   return map[key] as number | undefined;
 }
 
+function costLines(cost: Cost | Price): Price {
+  return Array.isArray(cost) ? cost : [cost];
+}
+
+function costTotals(cost: Cost | Price): Price {
+  const totals = new Map<number, number>();
+  for (const line of costLines(cost)) {
+    totals.set(line.tier, (totals.get(line.tier) || 0) + line.amount);
+  }
+  return [...totals].map(([tier, amount]) => ({ tier, amount }));
+}
+
 export function bankOf(state: State, tier: number): number {
   return state.bank[tier] || 0;
 }
 
-export function canAfford(state: State, cost: Cost): boolean {
-  return bankOf(state, cost.tier) + 1e-9 >= cost.amount;
+export function canAfford(state: State, cost: Cost | Price): boolean {
+  return costTotals(cost).every((line) => bankOf(state, line.tier) + 1e-9 >= line.amount);
 }
 
-function spend(state: State, cost: Cost): boolean {
-  if (!canAfford(state, cost)) return false;
-  state.bank[cost.tier] = Math.max(0, bankOf(state, cost.tier) - cost.amount);
+function spend(state: State, cost: Cost | Price): boolean {
+  const totals = costTotals(cost);
+  if (!totals.every((line) => bankOf(state, line.tier) + 1e-9 >= line.amount)) return false;
+  for (const line of totals) {
+    state.bank[line.tier] = Math.max(0, bankOf(state, line.tier) - line.amount);
+  }
   return true;
 }
 
@@ -75,7 +91,7 @@ export function extractorCount(state: State): number {
   return state.nodes.filter((node) => node.kind === 'extractor').length;
 }
 
-export function currentCost(state: State, kind: NodeKind, tier: number | null = null): Cost {
+export function currentCost(state: State, kind: NodeKind, tier: number | null = null): Price {
   if (kind === 'extractor') return extractorCost(extractorCount(state));
   return processorCost(tier, processorCopyCount(state, tier as number));
 }
@@ -128,6 +144,7 @@ export function placeProcessor(
   x: number,
   y: number,
   keepArmed = false,
+  rot: Rot = 0,
 ): ProcessorNode | null {
   if (app.state.nodes.length >= CONFIG.maxNodes) {
     app.audio.deny();
@@ -151,14 +168,14 @@ export function placeProcessor(
   }
   if (!spend(app.state, cost)) return null;
 
-  const node = makeProcessor(app.state.nextId++, tier, x, y);
+  const node = makeProcessor(app.state.nextId++, tier, x, y, rot);
   addInvested(node, cost);
   app.state.nodes.push(node);
   app.state.stats.built++;
   app.audio.place();
   app.afterChange();
   if (!keepArmed) app.setPendingBuild(null);
-  app.toast({ text: `${dataInfo(tier).name} forge online`, tone: 'ok', quiet: true });
+  app.toast({ text: `${dataInfo(tier).name} processor online`, tone: 'ok', quiet: true });
   return node;
 }
 
@@ -188,7 +205,7 @@ export function rotateNode(app: App, id: number): boolean {
   const node = nodeById(app.state, id);
   if (!node || node.kind !== 'processor') {
     app.audio.deny();
-    app.toast({ text: 'Only forges can be turned.', tone: 'bad', quiet: true });
+    app.toast({ text: 'Only processors can be turned.', tone: 'bad', quiet: true });
     return false;
   }
   node.rot = (((node.rot ?? 0) + 1) % 4) as Rot;
@@ -245,7 +262,7 @@ export function connectNodes(
   }
   if (to.kind !== 'processor' && to.kind !== 'vault') {
     app.audio.deny();
-    app.toast({ text: 'Wires end at a forge input or the vault.', tone: 'bad', quiet: true });
+    app.toast({ text: 'Wires end at a processor input or the vault.', tone: 'bad', quiet: true });
     return null;
   }
   if (app.state.links.length >= CONFIG.maxLinks) {

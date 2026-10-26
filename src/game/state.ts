@@ -10,6 +10,7 @@ import type {
   Link,
   MachineNode,
   Point,
+  Price,
   ProcessorNode,
   Rot,
   SaveState,
@@ -96,9 +97,11 @@ export function makeProcessor(id: number, tier: number, x: number, y: number, ro
   };
 }
 
-export function addInvested(node: MachineNode, cost: Cost): void {
+export function addInvested(node: MachineNode, cost: Cost | Price): void {
   node.invested = node.invested || {};
-  node.invested[cost.tier] = (node.invested[cost.tier] || 0) + cost.amount;
+  for (const line of Array.isArray(cost) ? cost : [cost]) {
+    node.invested[line.tier] = (node.invested[line.tier] || 0) + line.amount;
+  }
 }
 
 export function nodeById(state: State, id: number): MachineNode | null {

@@ -1,6 +1,6 @@
 # DATAMINE
 
-A browser-only idle game about running a data refinery. Extract raw data, push it through forges, and bank the output.
+A browser-only idle game about running a data refinery. Extract raw data, push it through processors, and bank the output.
 
 Play at [x01jin.github.io/datamine-game](https://x01jin.github.io/datamine-game/).
 
@@ -14,27 +14,19 @@ When one output feeds several inputs, each wire takes a proportional share. Set 
 
 ## The Ops board
 
-**Directives** are three standing orders generated from the current board: bank a quantity of a signal, hold a forge above 95% load, run more machines, bank new signal types, reach a deeper tier. Each pays banked signals, and some also pay cores. Completing one issues a replacement.
+**Directives** are three standing orders generated from the current board: bank a quantity of a signal, hold a processor above 95% load, run more machines, bank new signal types, reach a deeper tier. Each pays banked signals, and some also pay cores. Completing one issues a replacement.
 
 **Cores** buy permanent ranks in the core exchange: machine speed, buffer size, directive payouts, offline catch-up.
 
 **Deep scan** resets the refinery and pays cores based on your deepest tier and total banked. It unlocks at tier 06. Cores, ranks and archive records survive; the machines and the bank do not.
 
+## Economy
+
+Money is per tier and never pooled: each price is a list of lines, and every line is paid from its own bank. A paid extractor adds one 100,000 line per extractor already owned, from tier 0 upward; processors climb by copy and by tier. The cost model, curves and pacing are in [docs/economy.md](docs/economy.md).
+
 ## Controls
 
-| Key       | Action                                                       |
-| --------- | ------------------------------------------------------------ |
-| `P`       | Pause / resume                                               |
-| `M`       | Mute / unmute                                                |
-| `H`       | Fit the network                                              |
-| `B` / `C` | Build / Codex                                                |
-| `G`       | Toggle grid snap                                             |
-| `R`       | Turn the selected forge a quarter turn                       |
-| `+` / `-` | Zoom                                                         |
-| `Esc`     | Cancel placement, wire or selection                          |
-| `Delete`  | Dismantle the selected machine, cut a wire, remove an anchor |
-
-Touch: drag to pan, pinch to zoom, tap to select.
+`P` pause, `M` mute, `H` fit, `B`/`C` build and codex, `G` grid snap, `R` turn, `+`/`-` zoom, `Esc` cancel, `Delete` dismantle. Key bindings, placement and the touch limitation are in [docs/controls.md](docs/controls.md).
 
 ## Saves
 
@@ -55,4 +47,4 @@ npm run format     # oxfmt
 
 The board is WebGL (PixiJS v8) and the chrome around it is DOM. The simulation and economy are plain TypeScript with no browser dependency, so the test suite runs in Node.
 
-`docs/GDD.md` covers the design: the core loop, the tier progression, the economy and the pacing.
+`docs/GDD.md` covers the design: the core loop, the tier progression and the pacing. [docs/economy.md](docs/economy.md) is the cost model, and [docs/controls.md](docs/controls.md) is the key and pointer reference.

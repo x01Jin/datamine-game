@@ -28,7 +28,7 @@ import {
 import { dataInfo } from '../game/gamedata.ts';
 import type { App } from '../app.ts';
 import { CONFIG } from '../game/gamedata.ts';
-import type { Face, Link, MachineNode, Point } from '../game/types.ts';
+import type { Face, Link, MachineNode, Point, Rot } from '../game/types.ts';
 import { MAX_ANCHORS } from '../game/types.ts';
 
 const ANCHOR_GRAB = 11;
@@ -308,6 +308,11 @@ export class Interaction {
 
   private onContextMenu = (event: MouseEvent): void => {
     event.preventDefault();
+    if (this.app.view.pendingBuild) {
+      this.app.setPendingBuild(null);
+      this.app.audio.click();
+      return;
+    }
     if (this.mode === 'wire' && this.wire) {
       const draft = this.app.view.linkDraft;
       if (draft?.points.length) {
@@ -402,6 +407,14 @@ export class Interaction {
         this.app.toggleGridSnap();
         break;
       case 'r': {
+        const pending = this.app.view.pendingBuild;
+        if (pending) {
+          if (pending.kind !== 'processor') break;
+          pending.rot = ((pending.rot + 1) % 4) as Rot;
+          this.updateGhost();
+          this.app.audio.click();
+          break;
+        }
         const selection = this.app.view.selection;
         if (selection?.kind === 'node') this.app.rotateNode(selection.id);
         break;
@@ -804,7 +817,7 @@ export class Interaction {
       return;
     }
     if (pending.kind === 'extractor') placeExtractor(this.app, target.x, target.y, keepArmed);
-    else placeProcessor(this.app, pending.tier ?? 1, target.x, target.y, keepArmed);
+    else placeProcessor(this.app, pending.tier ?? 1, target.x, target.y, keepArmed, pending.rot);
   }
 
   private beginPinch(): void {

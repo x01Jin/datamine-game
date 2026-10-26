@@ -23,6 +23,7 @@ import {
   type WirePath,
 } from '../layout/geometry.ts';
 import { nodeStatus } from '../game/sim.ts';
+import { makeProcessor } from '../game/state.ts';
 import { CONFIG, bufferCap, dataInfo, fmt, recipeFor, tierLabel } from '../game/gamedata.ts';
 import { CHROME, METRICS, STATUS_COLOR, tierBright, tierColor, tierDim } from './theme.ts';
 import { label, setFontScale } from './labels.ts';
@@ -560,7 +561,7 @@ export class Board {
     view.title.tint = CHROME.ink;
     view.title.position.set(b.left + 34, b.top + 7);
 
-    view.meta.text = node.kind === 'extractor' ? 'EXTRACTOR' : `FORGE · ${this.tierTag(node)}`;
+    view.meta.text = node.kind === 'extractor' ? 'EXTRACTOR' : `PROCESSOR · ${this.tierTag(node)}`;
     view.meta.tint = CHROME.inkDim;
     view.meta.position.set(b.left + 34, b.top + 27);
 
@@ -837,7 +838,8 @@ export class Board {
   private ghostKey(): string {
     const ghost = this.view.ghost;
     if (!ghost) return '';
-    return `${ghost.kind}:${ghost.tier ?? ''}:${ghost.x}:${ghost.y}:${ghost.valid ? 1 : 0}`;
+    const rot = this.view.pendingBuild?.rot ?? 0;
+    return `${ghost.kind}:${ghost.tier ?? ''}:${rot}:${ghost.x}:${ghost.y}:${ghost.valid ? 1 : 0}`;
   }
 
   private hoverKey(): string {
@@ -951,6 +953,44 @@ export class Board {
         color,
         alpha: 0.85,
       });
+      const markerAlpha = ghost.valid ? 0.95 : 0.5;
+      if (ghost.kind === 'extractor') {
+        g.rect(ghost.x + 96 - 4.5, ghost.y - 4.5, 9, 9).fill({ color: tierBright(0), alpha: markerAlpha });
+      } else if (ghost.kind === 'processor') {
+        const rot = this.view.pendingBuild?.rot ?? 0;
+        const preview = makeProcessor(0, ghost.tier ?? 1, ghost.x, ghost.y, rot);
+        for (const port of inputPorts(preview)) {
+          const at = portWorldPos(preview, port);
+          g.rect(at.x - 4.5, at.y - 4.5, 9, 9).stroke({
+            width: 1.4,
+            color: tierBright(port.tier ?? 0),
+            alpha: markerAlpha,
+          });
+        }
+        const out = outputPort(preview);
+        const inputs = inputPorts(preview);
+        if (out && inputs.length) {
+          const at = portWorldPos(preview, out);
+          g.rect(at.x - 4.5, at.y - 4.5, 9, 9).fill({
+            color: tierBright(out.tier ?? 0),
+            alpha: markerAlpha,
+          });
+          const first = portWorldPos(preview, inputs[0]);
+          const last = portWorldPos(preview, inputs[inputs.length - 1]);
+          const from = { x: (first.x + last.x) / 2, y: (first.y + last.y) / 2 };
+          const midX = (from.x + at.x) / 2;
+          const midY = (from.y + at.y) / 2;
+          const length = Math.hypot(at.x - from.x, at.y - from.y) || 1;
+          const ux = (at.x - from.x) / length;
+          const uy = (at.y - from.y) / length;
+          const tail = 4;
+          const wing = 3.5;
+          g.moveTo(midX - ux * tail - uy * wing, midY - uy * tail + ux * wing)
+            .lineTo(midX + ux * tail, midY + uy * tail)
+            .lineTo(midX - ux * tail + uy * wing, midY - uy * tail - ux * wing)
+            .stroke({ width: 1.2, color: tierBright(out.tier ?? 0), alpha: ghost.valid ? 0.5 : 0.3 });
+        }
+      }
     }
 
     const wireDraft = this.view.linkDraft;

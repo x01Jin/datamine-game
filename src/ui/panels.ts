@@ -2,6 +2,7 @@ import {
   CONFIG,
   CORE_UPGRADES,
   coreUpgradeCost,
+  costText,
   dataInfo,
   deepScanReward,
   fmt,
@@ -152,6 +153,7 @@ export function renderBuild(ui: UI): void {
   if (!extractor) {
     const card = el('button', 'build-card');
     card.type = 'button';
+    card.setAttribute('aria-pressed', 'false');
     card.dataset.kind = 'extractor';
     card.innerHTML = `
       <span class="card-glyph">${glyphSvg(0)}</span>
@@ -183,6 +185,7 @@ export function renderBuild(ui: UI): void {
     if (ui.buildCards.has(`p${tier}`)) continue;
     const card = el('button', 'build-card');
     card.type = 'button';
+    card.setAttribute('aria-pressed', 'false');
     card.dataset.kind = 'processor';
     card.dataset.tier = String(tier);
     card.innerHTML = `
@@ -221,6 +224,9 @@ export function renderBuild(ui: UI): void {
   for (const entry of ui.buildCards.values()) {
     const { el: card, kind, tier } = entry;
     const cost = currentCost(state, kind, tier);
+    const primary = cost[cost.length - 1];
+    const extra = cost.length > 1 ? ` +${cost.length - 1} tier${cost.length > 2 ? 's' : ''}` : '';
+    const price = costText(cost);
     const info = kind === 'extractor' ? dataInfo(0) : dataInfo(tier ?? 0);
     tierVars(card, kind === 'extractor' ? 0 : (tier ?? 0));
 
@@ -232,13 +238,13 @@ export function renderBuild(ui: UI): void {
         `T00 · ${fmtRate(nominalRate(state, { kind: 'extractor', level: 1 } as MachineNode))}`,
       );
       setText(entry.recipe, 'Extracts Raw Data');
-      card.title = `Add an extractor. Cost: ${fmt(cost.amount)} ${info.name}. Produces Raw Data.`;
+      card.title = `Add an extractor. Cost: ${price}. Produces Raw Data.`;
     } else {
       const recipe = recipeFor(tier ?? 1);
       const inputs = (recipe?.inputs ?? [])
         .map((input) => `${input.amount}× ${dataInfo(input.tier).name}`)
         .join(' + ');
-      setText(entry.name, `${info.name} Forge`);
+      setText(entry.name, `${info.name} Processor`);
       setText(entry.owned, `×${processorCopyCount(state, tier ?? 0)}`);
       setText(
         entry.meta,
@@ -247,11 +253,11 @@ export function renderBuild(ui: UI): void {
         )}`,
       );
       setText(entry.recipe, `${inputs} → ${info.name}`);
-      card.title = `${inputs} → 1 ${info.name}. Cost: ${fmt(cost.amount)} ${info.name}.`;
+      card.title = `${inputs} → 1 ${info.name}. Cost: ${price}. R turns it before you place it.`;
     }
 
-    setText(entry.amount, fmt(cost.amount));
-    setText(entry.unit, dataInfo(cost.tier).name);
+    setText(entry.amount, fmt(primary.amount));
+    setText(entry.unit, `${dataInfo(primary.tier).name}${extra}`);
   }
 }
 
@@ -463,19 +469,34 @@ export function updateHint(ui: UI): void {
   const shared = [...outCount.values()].some((count) => count > 1);
 
   let text: string;
-  if (ui.app.view.linkDraft) {
+  const pending = ui.app.view.pendingBuild;
+  if (pending) {
+    const price = costText(currentCost(state, pending.kind, pending.tier));
+    const touch = ui.isMobile();
+    if (pending.kind === 'extractor') {
+      text = touch
+        ? `Placing extractor. Cost: ${price}. Tap the board to build; tap the card again to cancel.`
+        : `Placing extractor. Cost: ${price}. Right-click or Esc cancels.`;
+    } else {
+      text = touch
+        ? `Placing ${dataInfo(pending.tier ?? 1).name} processor. Cost: ${price}. ` +
+          'Tap the board to build; turn it from the inspector after placing.'
+        : `Placing ${dataInfo(pending.tier ?? 1).name} processor. Cost: ${price}. ` +
+          'R turns it; right-click or Esc cancels.';
+    }
+  } else if (ui.app.view.linkDraft) {
     text =
       'Click the board to drop wire points, then click an input port. Right-click undoes the last point, Esc cancels.';
   } else if (!hasLink) {
     text = "Click the extractor's output port, then the vault's input port, to bank raw data.";
   } else if (state.unlockedTier === 1 && !tier1) {
-    text = 'Raw data is banked and spendable. Build a Clean Bits forge from the panel.';
+    text = 'Raw data is banked and spendable. Build a Clean Bits processor from the panel.';
   } else if (tier1 && !rawInto1) {
-    text = 'Wire raw data into the Clean Bits forge.';
+    text = 'Wire raw data into the Clean Bits processor.';
   } else if (tier1 && !outOf1) {
-    text = "Send the forge's output into the vault to bank Clean Bits.";
+    text = "Send the processor's output into the vault to bank Clean Bits.";
   } else if (state.unlockedTier === 2) {
-    text = 'A Signals forge is open. It wants Clean Bits and raw data.';
+    text = 'A Signals processor is open. It wants Clean Bits and raw data.';
   } else if (busy) {
     text = 'That machine is running at 100%. Overclock it to widen the flow.';
   } else if (shared) {

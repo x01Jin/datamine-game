@@ -19,7 +19,7 @@ import { createInitialState, importGame, linkById, nodeById, saveGame, serialize
 import { SAVE_KEY } from './game/types.ts';
 import { GRID, snapNode } from './layout/geometry.ts';
 import { Board } from './render/board.ts';
-import type { App as GameApp, NodeKind, Selection, State, ToastOptions, View } from './game/types.ts';
+import type { App as GameApp, NodeKind, Rot, Selection, State, ToastOptions, View } from './game/types.ts';
 
 export interface UIApi {
   refresh(force?: boolean): void;
@@ -156,7 +156,7 @@ export class App implements GameApp {
     return window.innerWidth <= 900;
   }
 
-  setPendingBuild(pending: { kind: NodeKind; tier: number | null } | null): void {
+  setPendingBuild(pending: { kind: NodeKind; tier: number | null; rot: Rot } | null): void {
     this.view.pendingBuild = pending;
     if (!pending) this.view.ghost = null;
     this.interaction?.clearTransient();
@@ -178,7 +178,7 @@ export class App implements GameApp {
     }
     this.view.selection = null;
     this.ui?.deselect();
-    this.setPendingBuild({ kind, tier: kind === 'extractor' ? null : tier });
+    this.setPendingBuild({ kind, tier: kind === 'extractor' ? null : tier, rot: 0 });
     this.audio.click();
   }
 

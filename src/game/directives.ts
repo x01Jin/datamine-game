@@ -193,7 +193,7 @@ function buildUptime(state: State): Directive {
     tier,
     goal,
     title: `Steady hand on ${info.name}`,
-    brief: `Keep a ${info.name} forge above 95% load for ${goal}s.`,
+    brief: `Keep a ${info.name} processor above 95% load for ${goal}s.`,
     reward: { tier: Math.max(0, tier - 1), amount: 8 + tier * 6 },
     cores: tier >= 4 ? 1 : 0,
   };

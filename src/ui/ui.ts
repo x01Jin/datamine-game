@@ -407,7 +407,7 @@ export class UI implements UIApi {
       this.app.audio.discover();
       this.toast({
         text: `New signal: ${info.name}`,
-        sub: `${tierLabel(tier)} forge available`,
+        sub: `${tierLabel(tier)} processor available`,
         tone: 'discover',
         tier,
         duration: 3800,
@@ -447,6 +447,7 @@ export class UI implements UIApi {
       if (card.armed !== armed) {
         card.armed = armed;
         card.el.classList.toggle('is-armed', armed);
+        card.el.setAttribute('aria-pressed', String(armed));
       }
     }
 
@@ -789,7 +790,7 @@ export class UI implements UIApi {
     const parts: string[] = [];
     for (let tier = 1; tier <= state.unlockedTier; tier++) {
       if (canAfford(state, currentCost(state, 'processor', tier))) {
-        parts.push(`a ${dataInfo(tier).name} forge is within reach`);
+        parts.push(`a ${dataInfo(tier).name} processor is within reach`);
         break;
       }
     }

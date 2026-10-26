@@ -179,7 +179,7 @@ export interface View {
   hoverAnchor: { linkId: number; index: number } | null;
   ghost: Ghost | null;
   linkDraft: LinkDraft | null;
-  pendingBuild: { kind: NodeKind; tier: number | null } | null;
+  pendingBuild: { kind: NodeKind; tier: number | null; rot: Rot } | null;
   dragCell: { x: number; y: number; kind: NodeKind } | null;
   motion: boolean;
   paused: boolean;
@@ -189,6 +189,8 @@ export interface Cost {
   tier: number;
   amount: number;
 }
+
+export type Price = Cost[];
 
 export interface RecipeInput {
   tier: number;
@@ -256,7 +258,7 @@ export interface App {
   audio: Audio;
   toast(options: ToastOptions): void;
   afterChange(): void;
-  setPendingBuild(pending: { kind: NodeKind; tier: number | null } | null): void;
+  setPendingBuild(pending: { kind: NodeKind; tier: number | null; rot: Rot } | null): void;
   saveSoon(): void;
   saveNow(force?: boolean): boolean;
   isNarrow?(): boolean;

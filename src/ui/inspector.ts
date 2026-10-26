@@ -133,8 +133,8 @@ function buildNode(ui: UI, node: ExtractorNode | ProcessorNode): void {
   const isExtractor = node.kind === 'extractor';
   const tier = isExtractor ? 0 : node.tier;
   const info = dataInfo(tier);
-  const title = isExtractor ? 'Extractor' : `${info.name} Forge`;
-  const kicker = isExtractor ? `Miner · ${tierLabel(0)}` : `Forge · ${tierLabel(tier)}`;
+  const title = isExtractor ? 'Extractor' : `${info.name} Processor`;
+  const kicker = isExtractor ? `Miner · ${tierLabel(0)}` : `Processor · ${tierLabel(tier)}`;
   const status = nodeStatus(state, node);
   const util = node._util || 0;
   const cap = bufferCap(state, node);
@@ -151,7 +151,7 @@ function buildNode(ui: UI, node: ExtractorNode | ProcessorNode): void {
     ? '<span class="t">Raw Data</span><span class="muted">from the network</span>'
     : recipeMarkup(tier);
   const recipeTitle = isExtractor
-    ? 'Mines raw data continuously. Raw data buys extractors and feeds the first forge.'
+    ? 'Mines raw data continuously. Raw data buys extractors and feeds the first processor.'
     : `One cycle every ${fmt(cycle)}s. Buffer holds ${fmt(cap)} of each stream.`;
 
   const bars: string[] = [];
@@ -433,7 +433,7 @@ function buildLink(ui: UI, link: Link | null, anchorIndex = -1): void {
 function machineName(node: MachineNode): string {
   if (node.kind === 'vault') return 'The Vault';
   if (node.kind === 'extractor') return 'Raw Data Extractor';
-  return `${dataInfo(node.tier).name} Forge`;
+  return `${dataInfo(node.tier).name} Processor`;
 }
 
 function wiringRows(state: State, node: MachineNode): WireEnd[] {
