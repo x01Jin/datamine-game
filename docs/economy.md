@@ -56,7 +56,7 @@ That shape puts a ceiling on how wide a tier can get. The third copy of tier T i
 
 ## How a price is shown
 
-A processor price is a single line and prints as one number. Only an extractor price can run to several lines; the build card then prints the highest-tier line as the headline number and notes how many extra tier lines the price carries (`+1 tier`, `+2 tiers`). The card's hover text and the insufficient-funds toast list the whole price, sorted from the lowest tier up, using the same compact number format as the bank.
+A processor price is a single line and prints as one number. Only an extractor price can run to several lines; the build card lists every line in a stacked bill, each with its tier dot and currency name, and tints a line when that bank is short. The card's hover text and the insufficient-funds toast list the whole price, sorted from the lowest tier up, using the same compact number format as the bank.
 
 ## Upgrades
 

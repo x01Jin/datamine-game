@@ -15,9 +15,9 @@ function canvasOf(
 export function backgroundTexture(): Texture {
   const { canvas, ctx } = canvasOf(8, 256);
   const gradient = ctx.createLinearGradient(0, 0, 0, 256);
-  gradient.addColorStop(0, '#0a0e14');
-  gradient.addColorStop(0.55, '#080b10');
-  gradient.addColorStop(1, '#05070a');
+  gradient.addColorStop(0, '#1d1b14');
+  gradient.addColorStop(0.55, '#171610');
+  gradient.addColorStop(1, '#12110d');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 8, 256);
   return Texture.from(canvas);
@@ -28,8 +28,8 @@ export function vignetteTexture(): Texture {
   const { canvas, ctx } = canvasOf(size, size);
   const gradient = ctx.createRadialGradient(size / 2, size / 2, size * 0.18, size / 2, size / 2, size * 0.62);
   gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-  gradient.addColorStop(0.72, 'rgba(0, 0, 0, 0.28)');
-  gradient.addColorStop(1, 'rgba(0, 0, 0, 0.72)');
+  gradient.addColorStop(0.72, 'rgba(0, 0, 0, 0.24)');
+  gradient.addColorStop(1, 'rgba(0, 0, 0, 0.64)');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, size, size);
   return Texture.from(canvas);
@@ -37,8 +37,8 @@ export function vignetteTexture(): Texture {
 
 export function latticeTexture(step = 32): Texture {
   const { canvas, ctx } = canvasOf(step, step);
-  ctx.fillStyle = 'rgba(146, 176, 200, 0.16)';
-  ctx.fillRect(0, 0, 1.2, 1.2);
+  ctx.fillStyle = 'rgba(214, 198, 158, 0.12)';
+  ctx.fillRect(0, 0, 1.3, 1.3);
   return Texture.from(canvas);
 }
 

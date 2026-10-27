@@ -25,6 +25,7 @@ import {
   setText,
   shortName,
   sortedBy,
+  tierHex,
   tierVars,
 } from './dom.ts';
 import type { UI } from './ui.ts';
@@ -45,8 +46,8 @@ export interface BuildCard {
   owned: HTMLElement;
   meta: HTMLElement;
   recipe: HTMLElement;
-  amount: HTMLElement;
-  unit: HTMLElement;
+  costLines: HTMLElement;
+  costKey: string;
 }
 
 export interface DirectiveCard {
@@ -162,7 +163,7 @@ export function renderBuild(ui: UI): void {
         <span class="card-meta"></span>
         <span class="card-recipe"></span>
       </span>
-      <span class="card-cost"><b></b><small></small></span>
+      <span class="card-cost"><span class="cost-label">Build</span><span class="cost-lines"></span></span>
     `;
     list.append(card);
     extractor = {
@@ -175,8 +176,8 @@ export function renderBuild(ui: UI): void {
       owned: card.querySelector('.card-owned') as HTMLElement,
       meta: card.querySelector('.card-meta') as HTMLElement,
       recipe: card.querySelector('.card-recipe') as HTMLElement,
-      amount: card.querySelector('.card-cost b') as HTMLElement,
-      unit: card.querySelector('.card-cost small') as HTMLElement,
+      costLines: card.querySelector('.cost-lines') as HTMLElement,
+      costKey: '',
     };
     ui.buildCards.set('extractor', extractor);
   }
@@ -195,7 +196,7 @@ export function renderBuild(ui: UI): void {
         <span class="card-meta"></span>
         <span class="card-recipe"></span>
       </span>
-      <span class="card-cost"><b></b><small></small></span>
+      <span class="card-cost"><span class="cost-label">Build</span><span class="cost-lines"></span></span>
     `;
     list.append(card);
     ui.buildCards.set(`p${tier}`, {
@@ -208,8 +209,8 @@ export function renderBuild(ui: UI): void {
       owned: card.querySelector('.card-owned') as HTMLElement,
       meta: card.querySelector('.card-meta') as HTMLElement,
       recipe: card.querySelector('.card-recipe') as HTMLElement,
-      amount: card.querySelector('.card-cost b') as HTMLElement,
-      unit: card.querySelector('.card-cost small') as HTMLElement,
+      costLines: card.querySelector('.cost-lines') as HTMLElement,
+      costKey: '',
     });
   }
 
@@ -224,9 +225,17 @@ export function renderBuild(ui: UI): void {
   for (const entry of ui.buildCards.values()) {
     const { el: card, kind, tier } = entry;
     const cost = currentCost(state, kind, tier);
-    const primary = cost[cost.length - 1];
-    const extra = cost.length > 1 ? ` +${cost.length - 1} tier${cost.length > 2 ? 's' : ''}` : '';
     const price = costText(cost);
+    const costKey = cost.map((line) => `${line.tier}:${line.amount}`).join('|');
+    if (entry.costKey !== costKey) {
+      entry.costKey = costKey;
+      entry.costLines.innerHTML = cost
+        .map(
+          (line) =>
+            `<span class="cost-line"><i style="background:${tierHex(line.tier)}"></i><b>${fmt(line.amount)}</b><small>${escapeHtml(dataInfo(line.tier).name)}</small></span>`,
+        )
+        .join('');
+    }
     const info = kind === 'extractor' ? dataInfo(0) : dataInfo(tier ?? 0);
     tierVars(card, kind === 'extractor' ? 0 : (tier ?? 0));
 
@@ -244,7 +253,7 @@ export function renderBuild(ui: UI): void {
       const inputs = (recipe?.inputs ?? [])
         .map((input) => `${input.amount}× ${dataInfo(input.tier).name}`)
         .join(' + ');
-      setText(entry.name, `${info.name} Processor`);
+      setText(entry.name, info.name);
       setText(entry.owned, `×${processorCopyCount(state, tier ?? 0)}`);
       setText(
         entry.meta,
@@ -255,9 +264,6 @@ export function renderBuild(ui: UI): void {
       setText(entry.recipe, `${inputs} → ${info.name}`);
       card.title = `${inputs} → 1 ${info.name}. Cost: ${price}. R turns it before you place it.`;
     }
-
-    setText(entry.amount, fmt(primary.amount));
-    setText(entry.unit, `${dataInfo(primary.tier).name}${extra}`);
   }
 }
 

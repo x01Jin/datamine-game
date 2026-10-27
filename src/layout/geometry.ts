@@ -281,8 +281,10 @@ export function bezierPoints(from: Point, to: Point, fromFace: Face = 'e', toFac
   const toNormal = NORMALS[toFace] ?? NORMALS.w;
   const dx = Math.abs(to.x - from.x);
   const dy = Math.abs(to.y - from.y);
-  const fromOffset = Math.max(54, (fromNormal.dx !== 0 ? dx : dy) * 0.46);
-  const toOffset = Math.max(54, (toNormal.dx !== 0 ? dx : dy) * 0.46);
+  // A capped, distance-proportional reach keeps long wires from ballooning into loops
+  // while still clearing the machine body on short runs.
+  const fromOffset = Math.max(32, Math.min(104, (fromNormal.dx !== 0 ? dx : dy) * 0.34));
+  const toOffset = Math.max(32, Math.min(104, (toNormal.dx !== 0 ? dx : dy) * 0.34));
   return {
     a: from,
     b: { x: from.x + fromNormal.dx * fromOffset, y: from.y + fromNormal.dy * fromOffset },

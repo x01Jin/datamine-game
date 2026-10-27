@@ -441,6 +441,10 @@ export class UI implements UIApi {
       const poor = !canAfford(state, cost);
       const pending = this.app.view.pendingBuild;
       const armed = pending?.kind === card.kind && (card.kind === 'extractor' || pending.tier === card.tier);
+      const rows = card.costLines.children;
+      for (let i = 0; i < cost.length; i++) {
+        rows[i]?.classList.toggle('is-short', bankOf(state, cost[i].tier) < cost[i].amount);
+      }
       if (card.poor !== poor) {
         card.poor = poor;
         card.el.classList.toggle('is-poor', poor);

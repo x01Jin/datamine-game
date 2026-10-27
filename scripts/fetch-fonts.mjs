@@ -8,6 +8,12 @@ const UA =
 const FAMILIES = [
   { query: 'IBM+Plex+Sans:wght@400..600', name: 'Plex Sans', file: 'plex-sans', weights: ['400 600'] },
   { query: 'IBM+Plex+Mono:wght@400;500', name: 'Plex Mono', file: 'plex-mono', weights: ['400', '500'] },
+  {
+    query: 'Saira+Condensed:wght@500;600;700',
+    name: 'Saira Condensed',
+    file: 'saira-condensed',
+    weights: ['500', '600', '700'],
+  },
 ];
 
 async function main() {

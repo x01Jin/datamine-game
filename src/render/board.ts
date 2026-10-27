@@ -237,7 +237,7 @@ export class Board {
   private safeFrame(): { left: number; right: number; top: number; bottom: number } {
     const narrow = this.width <= 900;
     return {
-      left: narrow ? 16 : 330,
+      left: narrow ? 48 : 330,
       right: narrow ? 16 : this.view.selection ? 340 : 90,
       top: narrow ? 76 : 92,
       bottom: narrow ? 150 : 60,
@@ -318,7 +318,7 @@ export class Board {
       for (let i = -1; i <= rows; i++) {
         g.moveTo(-minor, i * minor).lineTo(this.width + minor, i * minor);
       }
-      g.stroke({ width: 1, color: 0x6f8ea6, alpha: minorAlpha });
+      g.stroke({ width: 1, color: 0x9d9172, alpha: minorAlpha });
     }
 
     const m = this.gridMajor;
@@ -332,7 +332,7 @@ export class Board {
       for (let i = -1; i <= rows; i++) {
         m.moveTo(-major, i * major).lineTo(this.width + major, i * major);
       }
-      m.stroke({ width: 1, color: 0x8fb0c8, alpha: METRICS.gridAlpha * 1.6 });
+      m.stroke({ width: 1, color: 0xc2b48d, alpha: METRICS.gridAlpha * 1.7 });
     }
   }
 
@@ -407,8 +407,8 @@ export class Board {
     }
     this.wireCasing.stroke({
       width: METRICS.wireWidth + 2,
-      color: 0x04060a,
-      alpha: 0.55,
+      color: 0x0b0a07,
+      alpha: 0.6,
       cap: 'round',
       join: 'round',
     });
@@ -526,7 +526,6 @@ export class Board {
   private paintNode(view: NodeView, node: MachineNode): void {
     const b = this.localBounds(node);
     const tier = view.tier;
-    const accent = node.kind === 'vault' ? CHROME.ink : tierColor(tier);
     const g = view.frame;
     g.clear();
 
@@ -536,45 +535,56 @@ export class Board {
     }
 
     const compact = view.lod === 0;
+    const plateAccent = tierDim(tier);
 
+    // Cream legend plates on the dark floor: offset shadow, paper face, tier band, bevel.
+    g.roundRect(b.left + 3, b.top + 3, b.w, b.h, METRICS.cardRadius).fill({
+      color: 0x000000,
+      alpha: 0.32,
+    });
     g.roundRect(b.left, b.top, b.w, b.h, METRICS.cardRadius).fill({
-      color: CHROME.plate,
+      color: CHROME.paper,
       alpha: 1,
     });
-    g.roundRect(b.left + 0.5, b.top + 0.5, b.w - 1, b.h - 1, METRICS.cardRadius).stroke({
-      width: 1,
-      color: CHROME.rule,
-      alpha: 0.8,
+    g.rect(b.left + 1.4, b.top + 1.4, b.w - 2.8, 5).fill({ color: tierColor(tier), alpha: 1 });
+    g.rect(b.left + 1.4, b.top + 1.4, b.w - 2.8, 1).fill({ color: 0x211f17, alpha: 0.45 });
+    g.rect(b.left + 1.4, b.top + 6.4, b.w - 2.8, 1).fill({ color: 0x211f17, alpha: 0.35 });
+    g.rect(b.left + 1, b.bottom - 6, b.w - 2, 1).fill({ color: 0xffffff, alpha: 0.26 });
+    g.roundRect(b.left + 0.6, b.top + 0.6, b.w - 1.2, b.h - 1.2, METRICS.cardRadius).stroke({
+      width: 1.2,
+      color: 0x1b1912,
+      alpha: 0.92,
     });
-    g.rect(b.left + 12, b.bottom - 12, b.w - 24, 3).fill({
-      color: CHROME.inset,
-      alpha: 1,
+    g.rect(b.left + 12, b.bottom - 13, b.w - 24, 5).fill({
+      color: 0x211f17,
+      alpha: 0.16,
     });
     this.paintPorts(g, node);
 
     view.glyph.texture = glyphTexture(this.glyphShape(node));
-    view.glyph.tint = accent;
-    view.glyph.position.set(b.left + 17, b.top + 17);
+    view.glyph.tint = plateAccent;
+    view.glyph.position.set(b.left + 17, b.top + 18);
     view.glyph.width = 18;
     view.glyph.height = 18;
 
     fitLabel(view.title, this.tierName(node), b.w - 74);
-    view.title.tint = CHROME.ink;
-    view.title.position.set(b.left + 34, b.top + 7);
+    view.title.tint = CHROME.paperInk;
+    view.title.position.set(b.left + 34, b.top + 8);
 
     view.meta.text = node.kind === 'extractor' ? 'EXTRACTOR' : `PROCESSOR · ${this.tierTag(node)}`;
-    view.meta.tint = CHROME.inkDim;
+    view.meta.tint = CHROME.paperDim;
     view.meta.position.set(b.left + 34, b.top + 27);
 
-    view.compact.text = node.kind === 'extractor' ? 'RAW' : this.tierTag(node);
-    view.compact.tint = accent;
+    view.compact.text = node.kind === 'extractor' ? 'RAW DATA' : this.tierName(node).toUpperCase();
+    fitLabel(view.compact, view.compact.text, b.w - 32);
+    view.compact.tint = plateAccent;
     view.compact.position.set(0, 0);
 
     view.status.position.set(b.left + 24, b.top + 46);
     view.detail.position.set(b.left + 12, b.top + 65);
     view.util.position.set(b.right - 12, b.top + 45);
     view.level.text = `L${node.level}`;
-    view.level.tint = accent;
+    view.level.tint = plateAccent;
     view.level.position.set(b.right - 12, b.top + 9);
 
     view.title.visible = !compact;
@@ -604,13 +614,18 @@ export class Board {
     const inputs = inputPorts(node);
     const out = outputPort(node);
     for (const port of inputs) {
-      const color = port.universal ? CHROME.inkDim : tierDim(port.tier ?? 0);
-      g.rect(port.dx - 3.5, port.dy - 3.5, 7, 7).stroke({ width: 1.4, color, alpha: 0.95 });
+      const color = port.universal ? CHROME.paperDim : tierDim(port.tier ?? 0);
+      g.rect(port.dx - 3.5, port.dy - 3.5, 7, 7).stroke({ width: 1.4, color, alpha: 0.9 });
     }
     if (out) {
       g.rect(out.dx - 3.5, out.dy - 3.5, 7, 7).fill({
-        color: tierBright(out.tier ?? 0),
-        alpha: 0.95,
+        color: tierDim(out.tier ?? 0),
+        alpha: 1,
+      });
+      g.rect(out.dx - 3.5, out.dy - 3.5, 7, 7).stroke({
+        width: 1,
+        color: 0xffffff,
+        alpha: 0.35,
       });
     }
   }
@@ -620,45 +635,53 @@ export class Board {
     const cx = 0;
     const cy = 0;
     const g = view.frame;
+    g.roundRect(b.left + 3, b.top + 3, b.w, b.h, METRICS.cardRadius).fill({
+      color: 0x000000,
+      alpha: 0.32,
+    });
     g.roundRect(b.left, b.top, b.w, b.h, METRICS.cardRadius).fill({
-      color: CHROME.plate,
+      color: CHROME.paper,
       alpha: 1,
     });
-    g.roundRect(b.left + 0.5, b.top + 0.5, b.w - 1, b.h - 1, METRICS.cardRadius).stroke({
-      width: 1,
-      color: CHROME.rule,
-      alpha: 0.8,
+    g.rect(b.left + 1.4, b.top + 1.4, b.w - 2.8, 4).fill({
+      color: CHROME.accent,
+      alpha: 0.95,
     });
-    g.circle(cx, cy, 52).stroke({ width: 1, color: CHROME.rule, alpha: 0.9 });
-    g.circle(cx, cy, 38).stroke({ width: 1, color: CHROME.rule, alpha: 0.65 });
+    g.rect(b.left + 1.4, b.top + 5.4, b.w - 2.8, 1).fill({ color: 0x211f17, alpha: 0.18 });
+    g.roundRect(b.left + 0.6, b.top + 0.6, b.w - 1.2, b.h - 1.2, METRICS.cardRadius).stroke({
+      width: 1.2,
+      color: 0x1b1912,
+      alpha: 0.92,
+    });
+    g.circle(cx, cy, 52).stroke({ width: 1, color: 0x211f17, alpha: 0.22 });
+    g.circle(cx, cy, 38).stroke({ width: 1, color: 0x211f17, alpha: 0.16 });
     for (let i = 0; i < 24; i++) {
       const angle = (Math.PI * 2 * i) / 24;
       const inner = i % 6 === 0 ? 58 : 62;
       g.moveTo(cx + Math.cos(angle) * inner, cy + Math.sin(angle) * inner)
         .lineTo(cx + Math.cos(angle) * 66, cy + Math.sin(angle) * 66)
-        .stroke({ width: 1, color: CHROME.rule, alpha: i % 6 === 0 ? 0.85 : 0.4 });
+        .stroke({ width: 1, color: 0x211f17, alpha: i % 6 === 0 ? 0.28 : 0.14 });
     }
     g.moveTo(b.left + 18, b.top + 34)
       .lineTo(b.right - 18, b.top + 34)
-      .stroke({ width: 1, color: CHROME.ruleSoft, alpha: 0.8 });
+      .stroke({ width: 1, color: 0x211f17, alpha: 0.2 });
     this.paintPorts(g, node);
 
     view.title.text = 'VAULT';
-    view.title.tint = CHROME.inkDim;
-    view.title.position.set(cx, b.top + 14);
+    view.title.tint = CHROME.paperDim;
+    view.title.position.set(cx, view.lod === 0 ? b.top + 8 : b.top + 14);
     view.title.anchor.set(0.5, 0);
     view.title.visible = true;
 
-    view.value.text = '';
-    view.value.tint = CHROME.ink;
+    view.value.tint = CHROME.paperInk;
     view.value.position.set(cx, cy - 2);
     view.value.visible = true;
 
     view.status.text = 'units held';
-    view.status.tint = CHROME.inkFaint;
+    view.status.tint = CHROME.paperDim;
     view.status.position.set(cx, cy + 22);
     view.status.anchor.set(0.5, 0);
-    view.status.visible = true;
+    view.status.visible = view.lod !== 0;
 
     view.meta.text = '';
     view.util.text = '';
@@ -752,7 +775,7 @@ export class Board {
     if (percent !== view.lastUtil) {
       view.lastUtil = percent;
       view.util.text = `${percent}%`;
-      view.util.tint = CHROME.inkDim;
+      view.util.tint = CHROME.paperDim;
       const cap = this.bufferCapFor(node);
       const ratio = Math.max(0, Math.min(1, (node.out?.amount ?? 0) / (cap || 1)));
       const barLeft = b.left + 12;
@@ -761,15 +784,15 @@ export class Board {
       view.bar.position.set(barLeft, barTop + 1.5);
       view.bar.height = 3;
       view.bar.width = Math.max(0, barW * ratio);
-      view.bar.tint = tierBright(view.tier);
-      view.bar.alpha = ratio > 0.002 ? 0.85 : 0;
+      view.bar.tint = tierColor(view.tier);
+      view.bar.alpha = ratio > 0.002 ? 0.95 : 0;
     }
 
     const detail = this.detailText(node);
     if (detail !== view.lastDetail) {
       view.lastDetail = detail;
       view.detail.text = detail;
-      view.detail.tint = CHROME.inkDim;
+      view.detail.tint = CHROME.paperDim;
     }
 
     if (node.level !== view.lastLevel) {

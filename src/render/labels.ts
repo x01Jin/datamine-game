@@ -1,6 +1,6 @@
 import { BitmapFont, BitmapText } from 'pixi.js';
 import type { TextStyleFontWeight } from 'pixi.js';
-import { FONT_MONO, FONT_SANS } from './theme.ts';
+import { FONT_DISPLAY, FONT_MONO, FONT_SANS } from './theme.ts';
 
 export type LabelRole = 'title' | 'meta' | 'status' | 'value' | 'compact';
 
@@ -17,34 +17,34 @@ const DIGITS = '0123456789';
 
 const ROLES: Record<LabelRole, RoleSpec> = {
   title: {
-    family: FONT_SANS,
-    size: 14,
-    weight: '500',
+    family: FONT_DISPLAY,
+    size: 15,
+    weight: '600',
     chars: `${UPPER}${LOWER}${DIGITS} .'-/+…`,
   },
   meta: {
     family: FONT_MONO,
-    size: 11,
+    size: 10.5,
     weight: '400',
     chars: `${UPPER}${DIGITS}% ×+→·-/`,
   },
   status: {
-    family: FONT_SANS,
-    size: 11,
-    weight: '400',
+    family: FONT_DISPLAY,
+    size: 12,
+    weight: '600',
     chars: `${UPPER}${LOWER} `,
   },
   value: {
     family: FONT_MONO,
-    size: 28,
+    size: 30,
     weight: '500',
     chars: `${UPPER}${LOWER}${DIGITS}.,+-`,
   },
   compact: {
-    family: FONT_MONO,
+    family: FONT_DISPLAY,
     size: 20,
-    weight: '500',
-    chars: `T${DIGITS}RAWN`,
+    weight: '600',
+    chars: `${UPPER}${LOWER}${DIGITS} …`,
   },
 };
 
@@ -103,9 +103,11 @@ export function setFontScale(scale: number): void {
 export async function waitForFonts(): Promise<void> {
   if (!('fonts' in document)) return;
   await Promise.all([
-    document.fonts.load(`400 11px "${FONT_MONO}"`),
-    document.fonts.load(`500 28px "${FONT_MONO}"`),
-    document.fonts.load(`500 14px "${FONT_SANS}"`),
+    document.fonts.load(`400 10.5px "${FONT_MONO}"`),
+    document.fonts.load(`500 30px "${FONT_MONO}"`),
+    document.fonts.load(`600 15px "${FONT_DISPLAY}"`),
+    document.fonts.load(`600 20px "${FONT_DISPLAY}"`),
+    document.fonts.load(`400 13px "${FONT_SANS}"`),
   ]).catch(() => undefined);
   await document.fonts.ready.catch(() => undefined);
 }
