@@ -37,11 +37,12 @@ export const FACE_LABEL: Record<Face, string> = {
 };
 
 export function rotationOf(node: MachineNode): Rot {
-  return node.kind === 'processor' ? (node.rot ?? 0) : 0;
+  return node.kind === 'processor' || node.kind === 'extractor' ? (node.rot ?? 0) : 0;
 }
 
+// Extractors have no inputs, so only `out` matters for them.
 export function rotationFaces(node: MachineNode): { in: Face; out: Face } {
-  if (node.kind === 'processor') return ROTATION_FACES[rotationOf(node)];
+  if (node.kind === 'processor' || node.kind === 'extractor') return ROTATION_FACES[rotationOf(node)];
   return { in: 'w', out: 'e' };
 }
 
@@ -149,11 +150,11 @@ const OUTPUT_CACHE = new Map<string, Port>();
 
 export function outputPort(node: MachineNode): Port | null {
   if (node.kind === 'vault') return null;
-  const key = node.kind === 'extractor' ? 'e' : `p:${node.tier}:${rotationOf(node)}`;
+  const key = node.kind === 'extractor' ? `e:${rotationOf(node)}` : `p:${node.tier}:${rotationOf(node)}`;
   const cached = OUTPUT_CACHE.get(key);
   if (cached) return cached;
   const size = nodeSize(node);
-  const face = node.kind === 'extractor' ? 'e' : rotationFaces(node).out;
+  const face = rotationFaces(node).out;
   const offset = faceOffset(face, 0, size.w, size.h);
   const port: Port = {
     dir: 'out',

@@ -2,7 +2,14 @@ import { App } from './app.ts';
 import { connectNodes } from './game/actions.ts';
 import { fmt, fmtDuration } from './game/gamedata.ts';
 import type { Rot, State } from './game/types.ts';
-import { createInitialState, importGame, loadGame, makeProcessor, serialize } from './game/state.ts';
+import {
+  createInitialState,
+  importGame,
+  loadGame,
+  makeExtractor,
+  makeProcessor,
+  serialize,
+} from './game/state.ts';
 import { simulate, step } from './game/sim.ts';
 import { Interaction } from './input/interaction.ts';
 import { Board } from './render/board.ts';
@@ -187,15 +194,7 @@ async function boot(): Promise<void> {
     spawn(kind: 'extractor' | 'processor', tier = 1, x = 0, y = 0, rot: Rot = 0) {
       const node =
         kind === 'extractor'
-          ? {
-              id: app.state.nextId++,
-              kind: 'extractor' as const,
-              x,
-              y,
-              level: 1,
-              out: { tier: 0 as const, amount: 0 },
-              invested: {},
-            }
+          ? makeExtractor(app.state.nextId++, x, y, rot)
           : makeProcessor(app.state.nextId++, tier, x, y, rot);
       app.state.nodes.push(node);
       app.afterChange();

@@ -90,7 +90,7 @@ The base price of a processor climbs 1.62 times per tier, and each one is paid i
 
 Two growth rates do the work. `processorTierGrowth` (1.62) sets how much rarer each tier is, and `globalGrowth` (1.22) hands back a speed multiplier every time the archive goes one tier deeper, so the whole network accelerates as the player climbs.
 
-Width has its own clock. The extractor curve counts machines, so each new miner adds a 100,000 line, one tier higher than the last. The second copy costs 100 times the first, then every later copy grows 1.55 times and is paid one tier higher. Both curves, with their tables and the frontier rule, are in [economy.md](economy.md). The design consequence is simple: early on, overclocking is cheaper than widening, and the fourth copy of the deepest tier has to wait for the next reveal.
+Width has its own clock. The extractor curve counts machines, so each new miner appends a line one tier higher and multiplies every line already in the price by 1.3, with 1.28 per archive tier on top. The second copy is therefore a wall that gets taller as the run gets deeper, never a flat fee. Processor copies cost 100 times the first, then every later copy grows 1.55 times and is paid one tier higher. Both curves, with their tables and the frontier rule, are in [economy.md](economy.md). The design consequence is simple: early on, overclocking is cheaper than widening, and the fourth processor copy of the deepest tier has to wait for the next reveal.
 
 ## What is deliberately not here
 

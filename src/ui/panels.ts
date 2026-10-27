@@ -238,7 +238,7 @@ export function renderBuild(ui: UI): void {
         `T00 · ${fmtRate(nominalRate(state, { kind: 'extractor', level: 1 } as MachineNode))}`,
       );
       setText(entry.recipe, 'Extracts Raw Data');
-      card.title = `Add an extractor. Cost: ${price}. Produces Raw Data.`;
+      card.title = `Add an extractor. Cost: ${price}. Produces Raw Data. Price scales with the archive depth (${tierLabel(state.unlockedTier)}).`;
     } else {
       const recipe = recipeFor(tier ?? 1);
       const inputs = (recipe?.inputs ?? [])
@@ -476,7 +476,7 @@ export function updateHint(ui: UI): void {
     if (pending.kind === 'extractor') {
       text = touch
         ? `Placing extractor. Cost: ${price}. Tap the board to build; tap the card again to cancel.`
-        : `Placing extractor. Cost: ${price}. Right-click or Esc cancels.`;
+        : `Placing extractor. Cost: ${price}. R turns the output face; right-click or Esc cancels.`;
     } else {
       text = touch
         ? `Placing ${dataInfo(pending.tier ?? 1).name} processor. Cost: ${price}. ` +

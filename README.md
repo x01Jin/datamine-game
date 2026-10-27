@@ -22,7 +22,7 @@ When one output feeds several inputs, each wire takes a proportional share. Set 
 
 ## Economy
 
-Money is per tier and never pooled: each price is a list of lines, and every line is paid from its own bank. A paid extractor adds one 100,000 line per extractor already owned, from tier 0 upward; processors climb by copy and by tier. The cost model, curves and pacing are in [docs/economy.md](docs/economy.md).
+Money is per tier and never pooled: each price is a list of lines, and every line is paid from its own bank. A paid extractor adds one line per extractor already owned, from tier 0 upward; each new line enters at the base while every line already in the price grows 1.3 per copy, with 1.28 per archive tier on top, so miners stay hard to buy. Processors climb by copy and by tier. The cost model, curves and pacing are in [docs/economy.md](docs/economy.md).
 
 ## Controls
 

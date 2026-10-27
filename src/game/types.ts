@@ -38,6 +38,7 @@ export interface ExtractorNode extends Telemetry {
   id: number;
   kind: 'extractor';
   tier?: undefined;
+  rot: Rot;
   x: number;
   y: number;
   level: number;

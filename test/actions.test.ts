@@ -186,21 +186,21 @@ test('a multi-line price needs every line and spends nothing when short', () => 
   const second = placeExtractor(app, 0, 300);
   assert.ok(second);
   assert.deepEqual(currentCost(state, 'extractor'), [
-    { tier: 0, amount: 100_000 },
+    { tier: 0, amount: 130_000 },
     { tier: 1, amount: 100_000 },
   ]);
-  state.bank[0] = 100_000;
+  state.bank[0] = 130_000;
   state.bank[1] = 99_999;
   assert.equal(canAfford(state, currentCost(state, 'extractor')), false);
   assert.equal(placeExtractor(app, 0, 700), null);
-  assert.equal(state.bank[0], 100_000);
+  assert.equal(state.bank[0], 130_000);
   assert.equal(state.bank[1], 99_999);
   state.bank[1] = 100_000;
   const third = placeExtractor(app, 0, 700);
   assert.ok(third);
   assert.equal(state.bank[0], 0);
   assert.equal(state.bank[1], 0);
-  assert.equal(third.invested[0], 100_000);
+  assert.equal(third.invested[0], 130_000);
   assert.equal(third.invested[1], 100_000);
 });
 

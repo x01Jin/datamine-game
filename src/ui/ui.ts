@@ -13,6 +13,7 @@ import { bankOf, canAfford, currentCost } from '../game/actions.ts';
 import { linkById, nodeById } from '../game/state.ts';
 import { nodeStatus } from '../game/sim.ts';
 import { byId, el, setText, sortedBy, statusLabel, tierHex } from './dom.ts';
+import { rotationOf } from '../layout/geometry.ts';
 import { buildInspector, holdingsHtml, vaultLedger } from './inspector.ts';
 import type { Live } from './inspector.ts';
 import {
@@ -479,7 +480,7 @@ export class UI implements UIApi {
         .filter((link) => link.from === node.id || link.to === node.id)
         .map((link) => `${link.from}>${link.to}`)
         .join(',');
-      key = `node:${node.id}:${node.level}:${node.kind === 'processor' ? (node.rot ?? 0) : 0}:${wiring}:${state.unlockedTier}`;
+      key = `node:${node.id}:${node.level}:${rotationOf(node)}:${wiring}:${state.unlockedTier}`;
     } else if (selection.kind === 'anchor') {
       const link = linkById(state, selection.linkId);
       if (!link || !link.anchors?.[selection.index]) {

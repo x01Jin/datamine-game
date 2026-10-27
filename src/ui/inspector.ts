@@ -172,7 +172,12 @@ function buildNode(ui: UI, node: ExtractorNode | ProcessorNode): void {
 
   const faces = rotationFaces(node);
   const stats = isExtractor
-    ? ''
+    ? statCell(
+        'Out face',
+        faces.out.toUpperCase(),
+        '',
+        `${FACE_LABEL[faces.out]} output face · Turn 90° moves it`,
+      )
     : statCell(
         'Face',
         `${faces.in.toUpperCase()}→${faces.out.toUpperCase()}`,
@@ -186,9 +191,7 @@ function buildNode(ui: UI, node: ExtractorNode | ProcessorNode): void {
     statCell('Level', `L${node.level}`, '', `Overclock level ${node.level} · ×${fmt(speed)} speed`),
   ].join('');
 
-  const actions = isExtractor
-    ? `<button class="btn btn-danger" data-action="dismantle" type="button" title="Refund ${escapeHtml(creditsLabel(node.invested))}. Wires attached to this machine are removed.">Dismantle</button>`
-    : `<button class="btn btn-quiet" data-action="rotate" type="button" title="Turn 90° (R). Attached wires follow the new ports.">Turn 90°</button>
+  const actions = `<button class="btn btn-quiet" data-action="rotate" type="button" title="Turn 90° (R). Attached wires follow the new ports.">Turn 90°</button>
        <button class="btn btn-danger" data-action="dismantle" type="button" title="Refund ${escapeHtml(creditsLabel(node.invested))}. Wires attached to this machine are removed.">Dismantle</button>`;
 
   root.innerHTML = `

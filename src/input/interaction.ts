@@ -409,7 +409,7 @@ export class Interaction {
       case 'r': {
         const pending = this.app.view.pendingBuild;
         if (pending) {
-          if (pending.kind !== 'processor') break;
+          if (pending.kind === 'vault') break;
           pending.rot = ((pending.rot + 1) % 4) as Rot;
           this.updateGhost();
           this.app.audio.click();
@@ -816,7 +816,7 @@ export class Interaction {
       this.app.toast({ text: 'Too close to another machine.', tone: 'bad', quiet: true });
       return;
     }
-    if (pending.kind === 'extractor') placeExtractor(this.app, target.x, target.y, keepArmed);
+    if (pending.kind === 'extractor') placeExtractor(this.app, target.x, target.y, keepArmed, pending.rot);
     else placeProcessor(this.app, pending.tier ?? 1, target.x, target.y, keepArmed, pending.rot);
   }
 

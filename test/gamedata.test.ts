@@ -61,11 +61,20 @@ test('recipes braid the two previous tiers', () => {
 });
 
 test('costs are whole prices and climb with ownership and tier', () => {
-  assert.deepEqual(extractorCost(0), [{ tier: 0, amount: CONFIG.machineTierCost }]);
-  assert.deepEqual(extractorCost(1), [{ tier: 0, amount: 100_000 }]);
-  assert.deepEqual(extractorCost(2), [
-    { tier: 0, amount: 100_000 },
+  assert.deepEqual(extractorCost(0, 1), [{ tier: 0, amount: CONFIG.machineTierCost }]);
+  assert.deepEqual(extractorCost(1, 1), [{ tier: 0, amount: 100_000 }]);
+  assert.deepEqual(extractorCost(2, 1), [
+    { tier: 0, amount: 130_000 },
     { tier: 1, amount: 100_000 },
+  ]);
+  assert.deepEqual(extractorCost(3, 1), [
+    { tier: 0, amount: 169_000 },
+    { tier: 1, amount: 130_000 },
+    { tier: 2, amount: 100_000 },
+  ]);
+  assert.deepEqual(extractorCost(2, 2), [
+    { tier: 0, amount: 166_400 },
+    { tier: 1, amount: 128_000 },
   ]);
   assert.deepEqual(processorCost(1, 0), [{ tier: 0, amount: 10 }]);
   assert.deepEqual(processorCost(2, 0), [{ tier: 1, amount: 17 }]);
@@ -77,6 +86,24 @@ test('costs are whole prices and climb with ownership and tier', () => {
   assert.deepEqual(processorCost(2, 2), [{ tier: 2, amount: 2635 }]);
   assert.deepEqual(upgradeCost({ kind: 'extractor', level: 1 }), { tier: 0, amount: 6 });
   assert.deepEqual(upgradeCost({ kind: 'processor', tier: 3, level: 2 }), { tier: 3, amount: 12 });
+});
+
+test('the miner price keeps climbing with archive depth', () => {
+  const shallow = extractorCost(2, 1);
+  const deeper = extractorCost(2, 6);
+  assert.equal(deeper.length, 2);
+  assert.equal(deeper[0].tier, 0);
+  assert.equal(deeper[1].tier, 1);
+  assert.ok(deeper[0].amount > shallow[0].amount * 3);
+  assert.ok(deeper[0].amount > deeper[1].amount);
+
+  const fleet = extractorCost(6, 6);
+  assert.equal(fleet.length, 6);
+  for (let index = 1; index < fleet.length; index++) {
+    assert.equal(fleet[index].tier, index);
+    assert.ok(fleet[index].amount < fleet[index - 1].amount);
+  }
+  assert.equal(fleet[5].amount, Math.ceil(CONFIG.machineTierCost * Math.pow(CONFIG.extractorTierGrowth, 5)));
 });
 
 test('cost text lists every line in tier order', () => {

@@ -20,10 +20,11 @@ import {
   nodeSize,
   outputPort,
   portWorldPos,
+  rotationOf,
   type WirePath,
 } from '../layout/geometry.ts';
 import { nodeStatus } from '../game/sim.ts';
-import { makeProcessor } from '../game/state.ts';
+import { makeExtractor, makeProcessor } from '../game/state.ts';
 import { CONFIG, bufferCap, dataInfo, fmt, recipeFor, tierLabel } from '../game/gamedata.ts';
 import { CHROME, METRICS, STATUS_COLOR, tierBright, tierColor, tierDim } from './theme.ts';
 import { label, setFontScale } from './labels.ts';
@@ -356,7 +357,7 @@ export class Board {
       mix(node.x);
       mix(node.y);
       mix(node.level);
-      mix(node.kind === 'processor' ? (node.rot ?? 0) : 0);
+      mix(rotationOf(node));
     }
     for (const link of this.state.links) {
       mix(link.id);
@@ -486,7 +487,7 @@ export class Board {
       bar,
       dot,
       tier: node.kind === 'processor' ? node.tier : 0,
-      rot: node.kind === 'processor' ? (node.rot ?? 0) : 0,
+      rot: rotationOf(node),
       kind: node.kind,
       lastStatus: '',
       lastUtil: -1,
@@ -692,7 +693,7 @@ export class Board {
       view.root.visible = true;
       view.root.position.set(node.x, node.y);
       const tier = node.kind === 'processor' ? node.tier : 0;
-      const rot = node.kind === 'processor' ? (node.rot ?? 0) : 0;
+      const rot = rotationOf(node);
       if (view.tier !== tier || view.kind !== node.kind || view.rot !== rot) {
         view.tier = tier;
         view.kind = node.kind;
@@ -954,12 +955,14 @@ export class Board {
         alpha: 0.85,
       });
       const markerAlpha = ghost.valid ? 0.95 : 0.5;
-      if (ghost.kind === 'extractor') {
-        g.rect(ghost.x + 96 - 4.5, ghost.y - 4.5, 9, 9).fill({ color: tierBright(0), alpha: markerAlpha });
-      } else if (ghost.kind === 'processor') {
+      if (ghost.kind === 'extractor' || ghost.kind === 'processor') {
         const rot = this.view.pendingBuild?.rot ?? 0;
-        const preview = makeProcessor(0, ghost.tier ?? 1, ghost.x, ghost.y, rot);
-        for (const port of inputPorts(preview)) {
+        const preview =
+          ghost.kind === 'extractor'
+            ? makeExtractor(0, ghost.x, ghost.y, rot)
+            : makeProcessor(0, ghost.tier ?? 1, ghost.x, ghost.y, rot);
+        const inputs = inputPorts(preview);
+        for (const port of inputs) {
           const at = portWorldPos(preview, port);
           g.rect(at.x - 4.5, at.y - 4.5, 9, 9).stroke({
             width: 1.4,
@@ -968,16 +971,19 @@ export class Board {
           });
         }
         const out = outputPort(preview);
-        const inputs = inputPorts(preview);
-        if (out && inputs.length) {
+        if (out) {
           const at = portWorldPos(preview, out);
           g.rect(at.x - 4.5, at.y - 4.5, 9, 9).fill({
             color: tierBright(out.tier ?? 0),
             alpha: markerAlpha,
           });
-          const first = portWorldPos(preview, inputs[0]);
-          const last = portWorldPos(preview, inputs[inputs.length - 1]);
-          const from = { x: (first.x + last.x) / 2, y: (first.y + last.y) / 2 };
+          const from = { x: ghost.x, y: ghost.y };
+          if (inputs.length) {
+            const first = portWorldPos(preview, inputs[0]);
+            const last = portWorldPos(preview, inputs[inputs.length - 1]);
+            from.x = (first.x + last.x) / 2;
+            from.y = (first.y + last.y) / 2;
+          }
           const midX = (from.x + at.x) / 2;
           const midY = (from.y + at.y) / 2;
           const length = Math.hypot(at.x - from.x, at.y - from.y) || 1;

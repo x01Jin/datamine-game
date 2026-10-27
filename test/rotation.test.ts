@@ -1,6 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createInitialState, importGame, makeProcessor, serialize } from '../src/game/state.ts';
+import {
+  createInitialState,
+  importGame,
+  makeExtractor,
+  makeProcessor,
+  serialize,
+} from '../src/game/state.ts';
 import { connectNodes, rotateNode } from '../src/game/actions.ts';
 import {
   GRID,
@@ -10,7 +16,7 @@ import {
   portWorldPos,
   rotationFaces,
 } from '../src/layout/geometry.ts';
-import type { App, ProcessorNode, State, ToastOptions } from '../src/game/types.ts';
+import type { App, ExtractorNode, ProcessorNode, State, ToastOptions } from '../src/game/types.ts';
 
 function appFor(state: State = createInitialState()): App {
   const calls = { toast: [] as unknown[], deny: 0 };
@@ -111,10 +117,52 @@ test('a wire follows a forge onto its new face', () => {
   assert.equal(after?.curve?.a.y, extractor.y);
 });
 
-test('only a forge can be turned', () => {
+test('an extractor turns its output face a quarter at a time', () => {
   const state = createInitialState();
   const app = appFor(state);
-  assert.equal(rotateNode(app, state.nodes[0].id), false);
+  const miner = state.nodes[0] as ExtractorNode;
+
+  for (let turn = 0; turn < 4; turn++) {
+    const faces = FACES[turn];
+    assert.equal(miner.rot, turn);
+    assert.deepEqual(rotationFaces(miner), { in: faces.in, out: faces.out });
+    assert.equal(outputPort(miner)?.face, faces.out);
+    assert.equal(inputPorts(miner).length, 0);
+    const pos = portWorldPos(miner, outputPort(miner)!);
+    assert.ok(pos.x % GRID.cell === 0 && pos.y % GRID.cell === 0, `${turn}: ${pos.x},${pos.y}`);
+    assert.equal(rotateNode(app, miner.id), true);
+  }
+  assert.equal(miner.rot, 0);
+});
+
+test('two extractors of one tier keep their own output faces', () => {
+  const state = createInitialState();
+  const straight = makeExtractor(state.nextId++, 0, 0, 0);
+  const turned = makeExtractor(state.nextId++, 240, 0, 1);
+  state.nodes.push(straight, turned);
+
+  assert.equal(outputPort(straight)?.face, 'e');
+  assert.equal(outputPort(turned)?.face, 's');
+});
+
+test('a rotated extractor keeps its wire on the new face', () => {
+  const state = createInitialState();
+  const app = appFor(state);
+  const miner = state.nodes[0] as ExtractorNode;
+  const processor = makeProcessor(state.nextId++, 1, 0, 0);
+  state.nodes.push(processor);
+  const link = connectNodes(app, miner.id, processor.id);
+  assert.ok(link);
+
+  assert.equal(linkPath(link, miner, processor)?.curve?.a.x, miner.x + 96);
+  rotateNode(app, miner.id);
+  assert.equal(linkPath(link, miner, processor)?.curve?.a.y, miner.y + 48);
+});
+
+test('the vault is the only machine that cannot turn', () => {
+  const state = createInitialState();
+  const app = appFor(state);
+  assert.equal(rotateNode(app, state.nodes[0].id), true);
   assert.equal(rotateNode(app, state.nodes[1].id), false);
 });
 
@@ -125,6 +173,16 @@ test('the orientation survives a save', () => {
   state.nodes.push(forge);
   const imported = importGame(serialize(state));
   const restored = imported.nodes.find((node) => node.id === forge.id) as ProcessorNode;
+  assert.equal(restored.rot, 2);
+  assert.equal(outputPort(restored)?.face, 'w');
+});
+
+test('the extractor orientation survives a save', () => {
+  const state = createInitialState();
+  const miner = state.nodes[0] as ExtractorNode;
+  miner.rot = 2;
+  const imported = importGame(serialize(state));
+  const restored = imported.nodes.find((node) => node.id === miner.id) as ExtractorNode;
   assert.equal(restored.rot, 2);
   assert.equal(outputPort(restored)?.face, 'w');
 });

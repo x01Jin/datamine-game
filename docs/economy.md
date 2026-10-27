@@ -8,16 +8,30 @@ Every machine price is a list of lines, and each line is paid from that tier's o
 
 The starting extractor is free. It arrives from `createInitialState()` with an empty `invested` record, so dismantling it refunds nothing.
 
-Each paid extractor adds one 100,000 line per extractor already owned, from tier 0 upward:
+Every paid extractor adds one line per extractor already owned, from tier 0 upward. Adding a copy does two things:
 
-| Extractor bought | Price                                    |
-| ---------------- | ---------------------------------------- |
-| 1st              | 100,000 Raw Data                         |
-| 2nd              | 100,000 Raw Data + 100,000 Clean Bits    |
-| 3rd              | 100,000 Raw Data + 100,000 Clean Bits + 100,000 Signals |
-| 4th              | the same three lines plus 100,000 Patterns |
+- **it appends a line** at the base amount (`machineTierCost`, 100,000) in the next tier up, so the newest currency enters the price at its cheapest;
+- **it multiplies every line already in the price** by `extractorCopyGrowth` (1.3), so the established banks carry the compounding bill.
 
-The line count follows the number of extractors on the board, not the deepest tier unlocked. A player who buys ahead of the unlock ladder sees a price line they cannot pay yet, and the purchase waits.
+Every line is also multiplied by the archive depth (`extractorTierGrowth`, 1.28, raised to `unlockedTier - 1`), so a miner bought at T20 is not pocket change next to a miner bought at T01.
+
+```
+line i amount = ceil(100,000 × 1.28^(unlockedTier - 1) × 1.3^(n - 1 - i))
+```
+
+where `n` is the number of extractors already owned (which is also the number of lines) and `i` runs from 0 at the oldest currency to `n - 1` at the line this purchase adds.
+
+At the first tier the first paid extractor costs 100,000 raw data. The first three paid extractors look like this:
+
+| Extractor bought | Price                                                   |
+| ---------------- | ------------------------------------------------------- |
+| 1st paid         | 100,000 Raw Data                                        |
+| 2nd paid         | 130,000 Raw Data + 100,000 Clean Bits                   |
+| 3rd paid         | 169,000 Raw Data + 130,000 Clean Bits + 100,000 Signals |
+
+Once the archive reaches T02 the same three lines become 216,320 / 166,400 / 128,000. The line count follows the number of extractors on the board: with `n` extractors the price has `n` lines, ending at tier `n - 1`, so a player who buys ahead of the unlock ladder sees a price line they cannot pay yet.
+
+The newest line is the cheapest and is paid in the rarest currency the price touches, while the oldest line has compounded the longest. That keeps each additional miner a portfolio decision, not a raw-data check: the bill lands in the established banks, where the next processor copy and the next overclock also compete, and the newest currency is still a gate because it has to exist at all. Mining width is deliberately the slowest axis in the game. Overclocking an extractor is the cheap early answer; a second or third miner is a project that needs the whole refinery behind it.
 
 ## Processors
 
@@ -62,11 +76,12 @@ Deep Survey rank 6 raises the cap to 14 hours, which covers the second extractor
 
 ## Pacing consequences
 
-- The second extractor is the first real wall: 100,000 raw data at 2/s is 13h 53m of production before any speed multiplier.
+- The first paid extractor is the first real wall: 100,000 raw data at 2/s is 13h 53m of production before any speed multiplier.
 - Speed multipliers, not body count, are the early answer. Level speed grows by 1.5 per level and costs 6, 12, 24 and so on, so a handful of upgrades outruns a second machine for a fraction of the price.
-- Copies 1 and 2 stay in T-1 and are cheap; the third is 1.55 times the second's amount and is paid in T; the fourth is paid in T+1, so width is gated by depth.
+- Mining width compounds: every copy raises every line already in the price by 1.3 and appends a base-priced line one tier higher, while the archive depth raises every line by 1.28 per tier. Miners therefore stay expensive instead of aging into pocket change.
+- Copies 1 and 2 of a processor stay in T-1 and are cheap; the third is 1.55 times the second's amount and is paid in T; the fourth is paid in T+1, so processor width is gated by depth.
 - A tier's bank has two jobs at once: its own overclocks and extra copies, and the first copies of the tier above. Spending it flat on one starves the other.
 
 ## Constants
 
-`CONFIG` in `src/game/gamedata.ts` holds `machineTierCost` (100,000), the per-line cost of an extractor, while processor prices use `processorBaseCost` (10), `processorTierGrowth` (1.62), `processorCopyJump` (100) and `processorCopyGrowth` (1.55). `upgradeBase` (6) and `upgradeGrowth` (2) price overclocks. `test/gamedata.test.ts` asserts exact prices, so a change to any of them fails the suite.
+`CONFIG` in `src/game/gamedata.ts` holds `machineTierCost` (100,000), the per-line base of an extractor, plus `extractorCopyGrowth` (1.3) and `extractorTierGrowth` (1.28). Processor prices use `processorBaseCost` (10), `processorTierGrowth` (1.62), `processorCopyJump` (100) and `processorCopyGrowth` (1.55). `upgradeBase` (6) and `upgradeGrowth` (2) price overclocks. `test/gamedata.test.ts` asserts exact prices, so a change to any of them fails the suite.

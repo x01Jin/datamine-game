@@ -13,6 +13,7 @@ import {
 } from './gamedata.ts';
 import {
   addInvested,
+  makeExtractor,
   makeProcessor,
   processorCopyCount,
   nodeById,
@@ -92,11 +93,17 @@ export function extractorCount(state: State): number {
 }
 
 export function currentCost(state: State, kind: NodeKind, tier: number | null = null): Price {
-  if (kind === 'extractor') return extractorCost(extractorCount(state));
+  if (kind === 'extractor') return extractorCost(extractorCount(state), state.unlockedTier);
   return processorCost(tier, processorCopyCount(state, tier as number));
 }
 
-export function placeExtractor(app: App, x: number, y: number, keepArmed = false): ExtractorNode | null {
+export function placeExtractor(
+  app: App,
+  x: number,
+  y: number,
+  keepArmed = false,
+  rot: Rot = 0,
+): ExtractorNode | null {
   if (app.state.nodes.length >= CONFIG.maxNodes) {
     app.audio.deny();
     app.toast({
@@ -119,15 +126,7 @@ export function placeExtractor(app: App, x: number, y: number, keepArmed = false
   }
   if (!spend(app.state, cost)) return null;
 
-  const node: ExtractorNode = {
-    id: app.state.nextId++,
-    kind: 'extractor',
-    x,
-    y,
-    level: 1,
-    out: { tier: 0, amount: 0 },
-    invested: {},
-  };
+  const node = makeExtractor(app.state.nextId++, x, y, rot);
   addInvested(node, cost);
   app.state.nodes.push(node);
   app.state.stats.built++;
@@ -203,9 +202,10 @@ export function upgradeNode(app: App, id: number): boolean {
 
 export function rotateNode(app: App, id: number): boolean {
   const node = nodeById(app.state, id);
-  if (!node || node.kind !== 'processor') {
+  if (!node) return false;
+  if (node.kind === 'vault') {
     app.audio.deny();
-    app.toast({ text: 'Only processors can be turned.', tone: 'bad', quiet: true });
+    app.toast({ text: 'The vault cannot be turned.', tone: 'bad', quiet: true });
     return false;
   }
   node.rot = (((node.rot ?? 0) + 1) % 4) as Rot;

@@ -32,6 +32,7 @@ export function createInitialState(vertical = false): State {
     {
       id: 1,
       kind: 'extractor',
+      rot: 0,
       x: extractorX,
       y: extractorY,
       level: 1,
@@ -77,6 +78,19 @@ export function createInitialState(vertical = false): State {
   };
   state.directives = generateDirectives(state);
   return state;
+}
+
+export function makeExtractor(id: number, x: number, y: number, rot: Rot = 0): ExtractorNode {
+  return {
+    id,
+    kind: 'extractor',
+    rot,
+    x,
+    y,
+    level: 1,
+    out: { tier: 0, amount: 0 },
+    invested: {},
+  };
 }
 
 export function makeProcessor(id: number, tier: number, x: number, y: number, rot: Rot = 0): ProcessorNode {
@@ -146,6 +160,7 @@ function snapshot(state: State) {
         base.inputs = { ...node.inputs };
         base.out = { ...node.out };
       } else if (node.kind === 'extractor') {
+        base.rot = node.rot ?? 0;
         base.out = { ...node.out };
       }
       return base;
@@ -366,6 +381,7 @@ function normalize(data: unknown): State {
       const extractor: ExtractorNode = {
         id,
         kind: 'extractor',
+        rot: normalizeRot(record.rot),
         x,
         y,
         level,

@@ -14,6 +14,8 @@ import type {
 export const CONFIG = Object.freeze({
   extractorRate: 2,
   machineTierCost: 100_000,
+  extractorCopyGrowth: 1.3,
+  extractorTierGrowth: 1.28,
   processorCycle: 2,
   processorBaseCost: 10,
   processorTierGrowth: 1.62,
@@ -198,10 +200,22 @@ export function recipeFor(tier: number): Recipe | null {
   return recipe;
 }
 
-export function extractorCost(owned: number): Price {
+// The miner curve is the width tax. Every copy appends one line, one tier higher, at the
+// base amount, and multiplies every line already in the price, so the newest line enters
+// at the base while the established banks carry the compounding bill. Archive depth
+// scales the whole price, so a fleet never becomes pocket change.
+export function extractorCost(owned: number, unlockedTier = 1): Price {
   const lines = Math.max(1, owned);
+  const depth = Math.pow(CONFIG.extractorTierGrowth, Math.max(0, unlockedTier - 1));
+  const unit = CONFIG.machineTierCost * depth;
   const price: Price = [];
-  for (let tier = 0; tier < lines; tier++) price.push({ tier, amount: CONFIG.machineTierCost });
+  for (let index = 0; index < lines; index++) {
+    // Line 0 is the oldest currency and has survived the most copies; the last line is
+    // the one this purchase introduces, so it sits at the base.
+    // The epsilon keeps 1.3^2 = 1.6900000000000002 from rounding up a clean price.
+    const amount = Math.ceil(unit * Math.pow(CONFIG.extractorCopyGrowth, lines - 1 - index) - 1e-6);
+    price.push({ tier: index, amount });
+  }
   return price;
 }
 

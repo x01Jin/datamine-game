@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createInitialState, makeProcessor } from '../src/game/state.ts';
+import { createInitialState, makeExtractor, makeProcessor } from '../src/game/state.ts';
 import {
   placeExtractor,
   placeProcessor,
@@ -79,6 +79,7 @@ function pushExtractor(state: State): void {
   state.nodes.push({
     id: state.nextId++,
     kind: 'extractor',
+    rot: 0,
     x: 600 + state.nodes.length * 240,
     y: 600,
     level: 1,
@@ -89,7 +90,7 @@ function pushExtractor(state: State): void {
 
 test('placement forwards rotation while the defaults stay unrotated', () => {
   const state = createInitialState();
-  state.bank[0] = 2000;
+  state.bank[0] = 200_000;
   const app = appFor(state);
 
   assert.equal(makeProcessor(99, 1, 900, 900).rot, 0);
@@ -101,6 +102,13 @@ test('placement forwards rotation while the defaults stay unrotated', () => {
   const plain = placeProcessor(app, 1, FORGE_B.x, FORGE_B.y);
   assert.ok(plain);
   assert.equal(plain.rot, 0);
+
+  const miner = placeExtractor(app, 600, 900, false, 3);
+  assert.ok(miner);
+  assert.equal(miner.rot, 3);
+
+  const plainMiner = makeExtractor(100, 0, 0);
+  assert.equal(plainMiner.rot, 0);
 });
 
 test('the third tier one processor is a single shifted line and refunds in full', () => {
@@ -142,7 +150,7 @@ test('processor copies shift one tier at a time as single lines', () => {
   }
 });
 
-test('the second paid extractor needs 100k on two tiers and refuses one unit short', () => {
+test('the second paid extractor needs 130k raw and 100k clean bits', () => {
   const state = createInitialState();
   state.bank[0] = 100_000;
   const app = appFor(state);
@@ -151,11 +159,11 @@ test('the second paid extractor needs 100k on two tiers and refuses one unit sho
   assert.ok(firstPaid);
   assert.equal(extractorCount(state), 2);
   assert.deepEqual(currentCost(state, 'extractor'), [
-    { tier: 0, amount: CONFIG.machineTierCost },
+    { tier: 0, amount: 130_000 },
     { tier: 1, amount: CONFIG.machineTierCost },
   ]);
 
-  state.bank[0] = 100_000;
+  state.bank[0] = 130_000;
   state.bank[1] = 99_999;
   const before = { ...state.bank };
   assert.equal(placeExtractor(app, 0, 430), null);
@@ -170,7 +178,7 @@ test('the second paid extractor needs 100k on two tiers and refuses one unit sho
   assert.equal(state.bank[1], 0);
 });
 
-test('extractor cost grows one 100k line per owned extractor', () => {
+test('extractor lines enter at the base and compound behind it', () => {
   const state = createInitialState();
   assert.equal(extractorCount(state), 1);
   assert.deepEqual(currentCost(state, 'extractor'), [{ tier: 0, amount: CONFIG.machineTierCost }]);
@@ -178,16 +186,24 @@ test('extractor cost grows one 100k line per owned extractor', () => {
   pushExtractor(state);
   assert.equal(extractorCount(state), 2);
   assert.deepEqual(currentCost(state, 'extractor'), [
-    { tier: 0, amount: CONFIG.machineTierCost },
-    { tier: 1, amount: CONFIG.machineTierCost },
+    { tier: 0, amount: 130_000 },
+    { tier: 1, amount: 100_000 },
   ]);
 
   pushExtractor(state);
   assert.equal(extractorCount(state), 3);
   assert.deepEqual(currentCost(state, 'extractor'), [
-    { tier: 0, amount: CONFIG.machineTierCost },
-    { tier: 1, amount: CONFIG.machineTierCost },
-    { tier: 2, amount: CONFIG.machineTierCost },
+    { tier: 0, amount: 169_000 },
+    { tier: 1, amount: 130_000 },
+    { tier: 2, amount: 100_000 },
+  ]);
+
+  state.unlockedTier = 2;
+  const deeper = currentCost(state, 'extractor');
+  assert.deepEqual(deeper, [
+    { tier: 0, amount: 216_320 },
+    { tier: 1, amount: 166_400 },
+    { tier: 2, amount: 128_000 },
   ]);
 });
 
